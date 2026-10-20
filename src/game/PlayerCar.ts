@@ -75,7 +75,7 @@ export class PlayerCar {
   private fxTimer = 0;
   private skidTimer = 0;
   onSparkTier: ((tier: number) => void) | null = null;
-  onBoost: ((tier: number) => void) | null = null;
+  onBoost: ((tier: number, source: 'drift' | 'ramp') => void) | null = null;
   private tmp = new THREE.Vector3();
   private tmp2 = new THREE.Vector3();
   private ray = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 });
@@ -180,13 +180,13 @@ export class PlayerCar {
     this.impulse.add(v);
   }
 
-  triggerBoost(tier: number): void {
+  triggerBoost(tier: number, source: 'drift' | 'ramp' = 'drift'): void {
     const cfg = tier >= 2 ? T.orangeBoost : T.blueBoost;
     this.boost.tier = tier;
     this.boost.speed = cfg.speed * this.stats.burstMult;
     this.boost.time = cfg.time;
     audio.boost(tier);
-    this.onBoost?.(tier);
+    this.onBoost?.(tier, source);
   }
 
   takeDamage(amount: number): number {
@@ -360,7 +360,7 @@ export class PlayerCar {
 
     // Landing
     if (this.grounded && !this.wasGrounded) {
-      if (this.airTime > 0.45) this.triggerBoost(2);
+      if (this.airTime > 0.45) this.triggerBoost(2, 'ramp');
       if (this.airTime > 0.25) this.hopVisual = -0.6;
     }
     this.airTime = this.grounded ? 0 : this.airTime + dt;

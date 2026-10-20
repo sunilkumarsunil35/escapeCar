@@ -49,6 +49,8 @@ export class WreckedScreen {
       <div><span>Cash Collected</span><b>+${formatCash(r.cashCollected)}</b></div>
       <div><span>Chasers Destroyed</span><b>${r.kills}</b></div>
       <div><span>Near-Miss Bonus</span><b>+${formatCash(r.nearMissCash)}</b></div>
+      <div><span>Objectives (${r.objectivesDone})</span><b>+${formatCash(r.objectiveCash)}</b></div>
+      <div><span>Combo Payouts (best x${r.bestCombo.toFixed(1)})</span><b>+${formatCash(r.comboCash)}</b></div>
       <div class="total"><span>TOTAL EARNED</span><b>+${formatCash(r.total)}</b></div>
       <div class="score"><span>Score</span><b>${r.score.toLocaleString('en-US')}</b></div>`;
     (this.el.querySelector('.w-board-title') as HTMLElement).textContent = opts.global ? 'GLOBAL LEADERBOARD' : 'LOCAL LEADERBOARD';

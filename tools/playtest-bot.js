@@ -23,7 +23,7 @@
       const p = g.player;
       const T = {
         spawns: [], damage: {}, kills: {}, deathAt: null, heatAt: {}, stallSeconds: 0, cash: 0,
-        engaged: [], lifetimes: [], secondsNoEnemyNear: 0, secondsWithTarget: 0, samples: 0, minHp: 999,
+        engaged: [], lifetimes: [], chopperSeen: false, killsByHeat: {}, secondsNoEnemyNear: 0, secondsWithTarget: 0, samples: 0, minHp: 999,
       };
       // --- Instrument spawns ---
       const origSpawn = g.enemies.spawn.bind(g.enemies);
@@ -58,6 +58,8 @@
       const origKilled = g.onEnemyKilled.bind(g);
       g.onEnemyKilled = (e) => {
         T.kills[e.kind] = (T.kills[e.kind] || 0) + 1;
+        const hl = g.director.heat.level;
+        T.killsByHeat[hl] = (T.killsByHeat[hl] || 0) + 1;
         if (e.__spawnT !== undefined) T.lifetimes.push(+(g.director.time - e.__spawnT).toFixed(1));
         origKilled(e);
       };
@@ -92,6 +94,7 @@
           }
           if (!near) T.secondsNoEnemyNear++;
           if (g.combat.target) T.secondsWithTarget++;
+          if (g.enemies.chopper.active) T.chopperSeen = true;
           T.heatAt[g.director.heat.level] = T.heatAt[g.director.heat.level] ?? Math.round(g.director.time);
           T.minHp = Math.min(T.minHp, Math.round(p.hp));
           if (p.speed < 6) slowFor++; else slowFor = 0;
@@ -102,11 +105,15 @@
       T.deathAt = g.state === 'playing' ? null : +g.director.time.toFixed(1);
       T.survived = +g.director.time.toFixed(1);
       T.distance = Math.round(p.dist);
-      T.cash = g.runCash + g.nearMissCash;
+      T.cash = g.runCash + g.nearMissCash + g.objectives.objectiveCash + g.objectives.comboCash;
+      T.objectives = g.objectives.completed;
+      T.objectiveCash = g.objectives.objectiveCash;
+      T.comboCash = g.objectives.comboCash;
+      T.bestCombo = g.objectives.bestMult;
       g.enemies.spawn = origSpawn;
       g.damagePlayer = origDamage;
       g.onEnemyKilled = origKilled;
-      if (g.state === 'playing') g.stop();
+      if (g.state === 'playing') { g.objectives.finish(); g.stop(); }
       // let the wreck sequence finish if it started
       for (let i = 0; i < 200 && g.state === 'wrecking'; i++) app.debugStep(1, dt);
       results.push(T);
@@ -130,7 +137,8 @@
         pctSecondsNoEnemyWithin30m: Math.round((T.secondsNoEnemyNear / Math.max(1, T.samples)) * 100),
         pctSecondsWithTarget: Math.round((T.secondsWithTarget / Math.max(1, T.samples)) * 100),
         damageTaken: Object.fromEntries(Object.entries(T.damage).map(([k, v]) => [k, Math.round(v)])), damageTotal: Math.round(dmgTotal),
-        stallSeconds: T.stallSeconds, cash: T.cash,
+        stallSeconds: T.stallSeconds, cash: T.cash, chopperSeen: T.chopperSeen, killsByHeat: T.killsByHeat,
+        objectivesDone: T.objectives, objectiveCash: T.objectiveCash, comboCash: T.comboCash, bestCombo: T.bestCombo,
       };
     });
   };

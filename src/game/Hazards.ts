@@ -170,7 +170,9 @@ export class HazardManager {
   }
 
   private placePowerup(dist: number, lat: number, heat: number): void {
-    const weights: PowerupId[] = heat >= 3 ? ['powerup_wrench', 'powerup_wrench', 'powerup_nitro', 'powerup_magnet'] : ['powerup_wrench', 'powerup_nitro', 'powerup_magnet'];
+    const weights: PowerupId[] = heat >= 3
+      ? ['powerup_wrench', 'powerup_wrench', 'powerup_wrench', 'powerup_nitro', 'powerup_magnet']
+      : heat === 2 ? ['powerup_wrench', 'powerup_wrench', 'powerup_nitro', 'powerup_magnet'] : ['powerup_wrench', 'powerup_nitro', 'powerup_magnet'];
     const want = pick(weights);
     const p = this.powerups.find((x) => !x.active && x.kind === want) ?? this.powerups.find((x) => !x.active);
     if (!p) return;
@@ -431,6 +433,7 @@ export class HazardManager {
           h.obj.visible = false;
           this.tmp.copy(h.pos).setY(0.6);
           ctx.combat.explode(this.tmp, 10, 120, 25, 6, true);
+          ctx.reportEvent('barrel');
           audio.explosion(true);
         }
         continue;

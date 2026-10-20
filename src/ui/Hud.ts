@@ -41,6 +41,8 @@ export class Hud {
         <button class="hud-pause" aria-label="Pause">❚❚</button>
       </div>
       <div class="hud-boss hidden"><div class="hud-boss-label">MAFIA CHOPPER</div><div class="hud-boss-bar"><div class="hud-boss-fill"></div></div></div>
+      <div class="hud-objective hidden"><div class="hud-obj-label"></div><div class="hud-obj-row"><b class="hud-obj-prog"></b><span class="hud-obj-reward"></span><i class="hud-obj-time"></i></div><div class="hud-obj-bar"><div></div></div></div>
+      <div class="hud-combo hidden"><b class="hud-combo-mult">x1.0</b><span class="hud-combo-count">COMBO</span><div class="hud-combo-bar"><div></div></div></div>
       <div class="hud-banner"></div>
       <div class="hud-toasts"></div>
       <div class="hud-boost"></div>
@@ -158,6 +160,43 @@ export class Hud {
       c.el.classList.toggle('ready', ready);
       c.el.classList.toggle('cooling', !ready);
     }
+  }
+
+  setObjective(o: { label: string; progress: number; target: number; timeLeft: number; reward: number } | null): void {
+    const el = this.el.querySelector('.hud-objective') as HTMLElement;
+    el.classList.toggle('hidden', !o);
+    if (!o) return;
+    const key = `${o.label}|${o.progress}|${Math.ceil(o.timeLeft)}`;
+    if (el.dataset.key !== key) {
+      el.dataset.key = key;
+      (el.querySelector('.hud-obj-label') as HTMLElement).textContent = o.label;
+      (el.querySelector('.hud-obj-prog') as HTMLElement).textContent = `${Math.min(o.progress, o.target)}/${o.target}`;
+      (el.querySelector('.hud-obj-reward') as HTMLElement).textContent = `+$${o.reward}`;
+      (el.querySelector('.hud-obj-time') as HTMLElement).textContent = `${Math.ceil(o.timeLeft)}s`;
+      el.classList.toggle('urgent', o.timeLeft < 10);
+    }
+    (el.querySelector('.hud-obj-bar div') as HTMLElement).style.transform = `scaleX(${Math.min(1, o.progress / o.target)})`;
+  }
+
+  setCombo(c: { count: number; mult: number; bank: number; timeFrac: number }): void {
+    const el = this.el.querySelector('.hud-combo') as HTMLElement;
+    const show = c.count >= 2;
+    el.classList.toggle('hidden', !show);
+    if (!show) return;
+    const key = `${c.count}|${c.mult}`;
+    if (el.dataset.key !== key) {
+      if (el.dataset.mult !== String(c.mult)) {
+        el.classList.remove('bump');
+        void el.offsetWidth;
+        el.classList.add('bump');
+        el.dataset.mult = String(c.mult);
+      }
+      el.dataset.key = key;
+      (el.querySelector('.hud-combo-mult') as HTMLElement).textContent = c.mult > 1 ? `x${c.mult.toFixed(1)}` : `${c.count} HITS`;
+      (el.querySelector('.hud-combo-count') as HTMLElement).textContent = `COMBO · ${c.count} · $${c.bank}`;
+      el.dataset.tier = String(Math.min(4, Math.floor(c.mult)));
+    }
+    (el.querySelector('.hud-combo-bar div') as HTMLElement).style.transform = `scaleX(${Math.max(0, c.timeFrac)})`;
   }
 
   setThreats(left: boolean, right: boolean, bottom: boolean): void {

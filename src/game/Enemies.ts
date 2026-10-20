@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ENEMIES, type EnemyDef, type EnemyKind } from '../data/config';
+import { ENEMIES, ENEMY_HP_PER_HEAT, type EnemyDef, type EnemyKind } from '../data/config';
 import { approach, clamp, damp, rand, wrapAngle } from '../core/math';
 import { wheelParts, type AssetRegistry } from '../assets/AssetRegistry';
 import { audio } from '../core/Audio';
@@ -159,7 +159,7 @@ export class EnemyManager {
     }
     dist = clamp(dist, ctx.track.backDist + 5, ctx.track.frontDist - 10);
     e.active = true;
-    e.hp = e.def.hp;
+    e.hp = Math.round(e.def.hp * (1 + ENEMY_HP_PER_HEAT * (ctx.heat.level - 1)));
     e.dist = dist;
     e.lat = lat;
     e.speed = fromAhead ? p.vF * 0.2 : p.vF + 8;

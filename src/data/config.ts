@@ -119,8 +119,8 @@ export interface EnemyDef {
 }
 
 export const ENEMIES: Record<EnemyKind, EnemyDef> = {
-  enemy_bike: { kind: 'enemy_bike', name: 'Hitman Bike', hp: 30, speed: 33, cash: 50, dps: 5, range: 7, halfW: 0.45, halfL: 1.1 },
-  enemy_sedan: { kind: 'enemy_sedan', name: 'Tommy Sedan', hp: 90, speed: 30, cash: 120, dps: 7, range: 30, halfW: 1.0, halfL: 2.1 },
+  enemy_bike: { kind: 'enemy_bike', name: 'Hitman Bike', hp: 30, speed: 33, cash: 50, dps: 4, range: 7, halfW: 0.45, halfL: 1.1 },
+  enemy_sedan: { kind: 'enemy_sedan', name: 'Tommy Sedan', hp: 90, speed: 30, cash: 120, dps: 5.5, range: 30, halfW: 1.0, halfL: 2.1 },
   enemy_chopper: { kind: 'enemy_chopper', name: 'Mafia Chopper', hp: 300, speed: 0, cash: 500, dps: 0, range: 0, halfW: 2.2, halfL: 4.5 },
 };
 
@@ -139,9 +139,9 @@ export interface HeatDef {
 
 export const HEAT_LEVELS: HeatDef[] = [
   { level: 1, start: 0, maxEnemies: 3, kinds: ['enemy_bike'], barrels: false, ramps: true, barricades: false, chopper: false, preset: 'preset_morning', biome: 'city' },
-  { level: 2, start: 60, maxEnemies: 5, kinds: ['enemy_bike', 'enemy_sedan'], barrels: true, ramps: true, barricades: false, chopper: false, preset: 'preset_midday', biome: 'coastal' },
-  { level: 3, start: 150, maxEnemies: 7, kinds: ['enemy_bike', 'enemy_sedan'], barrels: true, ramps: true, barricades: true, chopper: false, preset: 'preset_sunset', biome: 'city' },
-  { level: 4, start: 240, maxEnemies: 8, kinds: ['enemy_bike', 'enemy_sedan'], barrels: true, ramps: true, barricades: true, chopper: true, preset: 'preset_night', biome: 'city' },
+  { level: 2, start: 45, maxEnemies: 5, kinds: ['enemy_bike', 'enemy_sedan'], barrels: true, ramps: true, barricades: false, chopper: false, preset: 'preset_midday', biome: 'coastal' },
+  { level: 3, start: 105, maxEnemies: 7, kinds: ['enemy_bike', 'enemy_sedan'], barrels: true, ramps: true, barricades: true, chopper: false, preset: 'preset_sunset', biome: 'city' },
+  { level: 4, start: 165, maxEnemies: 8, kinds: ['enemy_bike', 'enemy_sedan'], barrels: true, ramps: true, barricades: true, chopper: true, preset: 'preset_night', biome: 'city' },
 ];
 
 export interface PowerupDef {
@@ -239,3 +239,5 @@ export const PICKUP_CASH_VALUE = 25;
 export const NEAR_MISS_BONUS = 25;
 export const MAGNET_RADIUS = 25;
 export const NITRO_MAX_CHARGES = 3;
+/** Chaser toughness grows with Heat: x1.0, x1.2, x1.4, x1.6. */
+export const ENEMY_HP_PER_HEAT = 0.2;

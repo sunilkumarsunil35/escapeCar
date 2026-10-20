@@ -144,7 +144,7 @@ button { font-family: inherit; cursor: pointer; }
 .hud-time { font-family: var(--font-title); font-size: 18px; }
 .hud-link { font-size: 12px; font-weight: 700; padding: 6px 10px; border-radius: 8px; background: rgba(34, 197, 94, 0.3); border: 1px solid var(--green); }
 .hud-pause { pointer-events: auto; width: 46px; height: 42px; border-radius: 10px; border: 2px solid rgba(255, 255, 255, 0.7); background: rgba(0, 0, 0, 0.55); color: #fff; font-weight: 900; font-size: 15px; }
-.hud-boss { position: absolute; top: calc(52px + var(--safe-t)); left: 50%; transform: translateX(-50%); width: min(420px, 50vw); text-align: center; }
+.hud-boss { position: absolute; top: calc(124px + var(--safe-t)); left: 50%; transform: translateX(-50%); width: min(420px, 50vw); text-align: center; }
 .hud-boss-label { font-family: var(--font-title); font-size: 13px; color: #fca5a5; text-shadow: 0 2px 0 #000; }
 .hud-boss-bar { height: 10px; border-radius: 6px; background: rgba(0, 0, 0, 0.6); border: 1px solid #fca5a5; overflow: hidden; margin-top: 3px; }
 .hud-boss-fill { height: 100%; background: linear-gradient(90deg, #b91c1c, #f87171); transition: width 0.2s; }
@@ -189,6 +189,33 @@ button { font-family: inherit; cursor: pointer; }
   .hud-chip.gadget { display: none; }
   .hud-chip-key { display: none; }
   .hud-chip { padding-left: 10px; }
+}
+.hud-objective { position: absolute; top: calc(56px + var(--safe-t)); left: 50%; transform: translateX(-50%); min-width: 260px; max-width: 46vw; padding: 7px 12px 8px; border-radius: 10px; background: rgba(0, 0, 0, 0.55); border: 2px solid rgba(253, 230, 138, 0.55); text-align: center; }
+.hud-obj-label { font-weight: 900; font-size: 13px; letter-spacing: 0.06em; color: #fde68a; }
+.hud-obj-row { display: flex; justify-content: center; align-items: baseline; gap: 10px; margin-top: 2px; font-size: 12px; }
+.hud-obj-prog { font-family: var(--font-title); font-size: 15px; }
+.hud-obj-reward { color: #86efac; font-weight: 800; }
+.hud-obj-time { font-style: normal; opacity: 0.75; }
+.hud-objective.urgent { border-color: #f87171; }
+.hud-objective.urgent .hud-obj-time { color: #fca5a5; opacity: 1; }
+.hud-obj-bar { height: 4px; margin-top: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.15); overflow: hidden; }
+.hud-obj-bar div { height: 100%; background: #fde68a; transform-origin: left; transition: transform 0.2s; }
+.hud-combo { position: absolute; right: calc(24px + var(--safe-r)); top: calc(64px + var(--safe-t)); text-align: right; min-width: 150px; max-width: 30vw; }
+.hud-combo-mult { display: block; white-space: nowrap; font-family: var(--font-title); font-size: 36px; line-height: 1; color: #fde68a; text-shadow: 0 4px 0 #78350f, 0 0 18px rgba(251, 191, 36, 0.6); }
+.hud-combo[data-tier='2'] .hud-combo-mult { color: #fdba74; }
+.hud-combo[data-tier='3'] .hud-combo-mult { color: #f472b6; text-shadow: 0 4px 0 #831843, 0 0 20px rgba(244, 114, 182, 0.7); }
+.hud-combo[data-tier='4'] .hud-combo-mult { color: #67e8f9; text-shadow: 0 4px 0 #164e63, 0 0 24px rgba(34, 211, 238, 0.8); }
+.hud-combo-count { display: block; font-weight: 900; font-size: 11px; letter-spacing: 0.1em; text-shadow: 0 2px 2px #000; }
+.hud-combo-bar { height: 5px; margin-top: 4px; border-radius: 3px; background: rgba(255, 255, 255, 0.18); overflow: hidden; }
+.hud-combo-bar div { height: 100%; background: linear-gradient(90deg, #fbbf24, #f472b6); transform-origin: right; }
+.hud-combo.bump .hud-combo-mult { animation: comboBump 0.35s ease-out; transform-origin: right center; }
+@keyframes comboBump { 0% { transform: scale(1.5); } 100% { transform: scale(1); } }
+.hud-banner.objective { font-size: clamp(18px, 3.2vw, 34px); top: 30%; color: #fde68a; text-align: center; white-space: normal; line-height: 1.15; }
+.hud-banner.objective span { color: #fff; font-size: 0.8em; }
+@media (pointer: coarse) {
+  .hud-objective { top: calc(50px + var(--safe-t)); min-width: 0; transform: translateX(-50%) scale(0.85); transform-origin: top center; }
+  .hud-combo { top: calc(62px + var(--safe-t)); }
+  .hud-combo-mult { font-size: 30px; }
 }
 .hud-arrow { position: absolute; font-size: 40px; font-weight: 900; color: var(--red); text-shadow: 0 0 12px rgba(239, 68, 68, 0.9), 0 2px 0 #000; opacity: 0; }
 .hud-arrow.left { left: calc(10px + var(--safe-l)); top: 50%; transform: translateY(-50%); }

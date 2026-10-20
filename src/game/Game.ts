@@ -16,6 +16,7 @@ import { EnemyManager, type Enemy } from './Enemies';
 import { HazardManager } from './Hazards';
 import { Combat } from './Combat';
 import { Ambient } from './Ambient';
+import { Objectives, type GameEvent } from './Objectives';
 import { Director } from './Director';
 import { CameraRig } from './CameraRig';
 import type { GameCtx } from './types';
@@ -31,6 +32,10 @@ export interface RunResult {
   cashCollected: number;
   nearMissCash: number;
   distanceBonus: number;
+  objectivesDone: number;
+  objectiveCash: number;
+  comboCash: number;
+  bestCombo: number;
   total: number;
   score: number;
 }
@@ -55,6 +60,7 @@ export class Game implements GameCtx {
   readonly combat: Combat;
   readonly ambient: Ambient;
   readonly director = new Director();
+  readonly objectives = new Objectives();
   readonly hud: Hud;
   private skyline: THREE.Group;
   private headlight: THREE.SpotLight;
@@ -115,7 +121,10 @@ export class Game implements GameCtx {
       if (tier === 2) this.hud.toast('ORANGE TURBO READY', 'orange');
       else if (tier === 1) this.hud.toast('BLUE TURBO READY', 'blue');
     };
-    this.player.onBoost = (tier) => {
+    this.objectives.onPayout = (_cash, label, cls) => this.hud.toast(label, cls);
+    this.objectives.onBanner = (html, cls) => this.hud.showBanner(html, cls, 2.2);
+    this.player.onBoost = (tier, source) => {
+      this.reportEvent(source === 'ramp' ? 'ramp_jump' : tier >= 2 ? 'turbo_orange' : 'turbo_blue');
       this.hud.toast(tier >= 2 ? 'ORANGE TURBO!' : 'BLUE TURBO!', tier >= 2 ? 'orange' : 'blue');
       this.rig.shake(tier >= 2 ? 0.25 : 0.12);
     };
@@ -135,6 +144,7 @@ export class Game implements GameCtx {
   damagePlayer(amount: number, shake = 0): void {
     if (this.state !== 'playing' || this.player.dead) return;
     const dmg = this.player.takeDamage(amount);
+    if (dmg > 0) this.objectives.damage(dmg);
     this.vibeAcc += dmg;
     const now = performance.now();
     if ((this.vibeAcc >= 3 || shake >= 0.2) && now - this.lastVibe > 140) {
@@ -148,7 +158,13 @@ export class Game implements GameCtx {
     if (this.player.hp <= 0) this.wreck();
   }
 
+  reportEvent(type: GameEvent, amount = 1): void {
+    if (this.state !== 'playing') return;
+    this.objectives.event(type, amount);
+  }
+
   onEnemyKilled(e: Enemy): void {
+    this.reportEvent(e.isChopper ? 'kill_chopper' : e.kind === 'enemy_sedan' ? 'kill_sedan' : 'kill_bike');
     this.combat.kills++;
     this.hazards.spawnCashBurst(e.worldPos.clone().setY(e.isChopper ? Math.max(2, e.alt) : 1.2), e.def.cash, e.dist);
     // Kill feed: bikes are frequent, so they're grouped into a short streak instead of one toast each.
@@ -164,6 +180,7 @@ export class Game implements GameCtx {
 
   collectCash(value: number): void {
     this.runCash += value;
+    this.reportEvent('cash', value);
   }
 
   applyPowerup(id: PowerupId): void {
@@ -222,6 +239,7 @@ export class Game implements GameCtx {
 
   nearMiss(): void {
     this.nearMissCash += NEAR_MISS_BONUS;
+    this.reportEvent('near_miss');
     this.hud.toast(`NEAR MISS +$${NEAR_MISS_BONUS}`, 'gold');
   }
 
@@ -240,6 +258,7 @@ export class Game implements GameCtx {
     this.hazards.reset();
     this.ambient.reset();
     this.director.reset();
+    this.objectives.reset();
     this.hazards.heat = HEAT_LEVELS[0];
     this.track.reset();
     this.player.spawn(loadout);
@@ -300,6 +319,7 @@ export class Game implements GameCtx {
     this.state = 'wrecking';
     this.wreckT = WRECK_REAL_SECONDS;
     this.player.dead = true;
+    this.objectives.finish();
     this.combat.target = null;
     this.fx.setReticle(null, this.camera, 1);
     this.input.setTouchVisible(false);
@@ -316,7 +336,8 @@ export class Game implements GameCtx {
 
   private result(): RunResult {
     const distanceBonus = Math.floor(Math.max(0, this.player.dist) / 10);
-    const total = distanceBonus + this.runCash + this.nearMissCash;
+    const o = this.objectives;
+    const total = distanceBonus + this.runCash + this.nearMissCash + o.objectiveCash + o.comboCash;
     return {
       time: this.director.time,
       maxHeat: this.director.maxHeat,
@@ -325,6 +346,10 @@ export class Game implements GameCtx {
       cashCollected: this.runCash,
       nearMissCash: this.nearMissCash,
       distanceBonus,
+      objectivesDone: o.completed,
+      objectiveCash: o.objectiveCash,
+      comboCash: o.comboCash,
+      bestCombo: o.bestMult,
       total,
       score: Math.round(this.director.time * 10 + this.combat.kills * 50 + total),
     };
@@ -376,7 +401,10 @@ export class Game implements GameCtx {
     }
     this.track.update(this.player.dist);
 
-    if (!wrecking) this.director.update(sdt, this);
+    if (!wrecking) {
+      this.director.update(sdt, this);
+      this.objectives.update(sdt, this.director.heat.level);
+    }
     WATER_UNIFORMS.uTime.value += sdt;
     this.enemies.update(sdt, this);
     this.hazards.update(sdt, this);
@@ -394,13 +422,15 @@ export class Game implements GameCtx {
     this.hud.update(dt, {
       hp: this.player.hp,
       maxHp: this.player.stats.maxHp,
-      cash: this.runCash + this.nearMissCash,
+      cash: this.runCash + this.nearMissCash + this.objectives.objectiveCash + this.objectives.comboCash,
       heat: this.director.heat.level,
       time: this.director.time,
       boss,
       boostTier: this.player.drift.active ? this.player.drift.tier : 0,
     });
     this.updateLoadoutHud();
+    this.hud.setObjective(this.objectives.objectiveView());
+    this.hud.setCombo(this.objectives.comboView());
     audio.setEngine(Math.min(1.4, this.player.speed / 30), this.player.boosting);
 
     if (wrecking) {

@@ -7,6 +7,7 @@ import type { HazardManager } from './Hazards';
 import type { Combat } from './Combat';
 import type { Ambient } from './Ambient';
 import type { HeatDef, PowerupId } from '../data/config';
+import type { GameEvent } from './Objectives';
 
 /** Shared runtime context passed to every gameplay system each frame. */
 export interface GameCtx {
@@ -25,6 +26,7 @@ export interface GameCtx {
   collectCash(value: number): void;
   applyPowerup(id: PowerupId): void;
   nearMiss(): void;
+  reportEvent(type: GameEvent, amount?: number): void;
   shake(amount: number): void;
   toast(text: string, cls?: string): void;
 }
