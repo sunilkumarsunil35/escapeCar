@@ -64,6 +64,8 @@ export class Game implements GameCtx {
   private runCash = 0;
   private nearMissCash = 0;
   private vibeAcc = 0;
+  private bikeStreak = 0;
+  private lastBikeKill = -99;
   private lastVibe = 0;
   private tp: TrackPoint;
   private lastInput: FrameInput = NEUTRAL;
@@ -149,7 +151,14 @@ export class Game implements GameCtx {
   onEnemyKilled(e: Enemy): void {
     this.combat.kills++;
     this.hazards.spawnCashBurst(e.worldPos.clone().setY(e.isChopper ? Math.max(2, e.alt) : 1.2), e.def.cash, e.dist);
-    this.hud.toast(`${e.def.name.toUpperCase()} DOWN  +${e.def.cash > 0 ? '$' + e.def.cash : ''}`, e.isChopper ? 'gold' : '');
+    // Kill feed: bikes are frequent, so they're grouped into a short streak instead of one toast each.
+    if (e.kind === 'enemy_bike') {
+      this.bikeStreak = this.time - this.lastBikeKill < 2.5 ? this.bikeStreak + 1 : 1;
+      this.lastBikeKill = this.time;
+      if (this.bikeStreak === 1 || this.bikeStreak % 3 === 0) this.hud.toast(this.bikeStreak > 1 ? `BIKE STREAK x${this.bikeStreak}` : 'HITMAN BIKE DOWN', this.bikeStreak > 1 ? 'gold' : '');
+    } else {
+      this.hud.toast(`${e.def.name.toUpperCase()} DOWN  +$${e.def.cash}`, e.isChopper ? 'gold' : '');
+    }
     if (e.isChopper) this.hud.showBanner('CHOPPER <b>DOWN!</b>', 'gold', 2);
   }
 

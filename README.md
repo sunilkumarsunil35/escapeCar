@@ -44,6 +44,8 @@ Use **Revert to procedural** to set `url` back to `null`.
 
 `?debug` lets you press keys 1–4 to jump straight to that Heat level.
 
+`tools/playtest-bot.js` is an automated playtester for balancing. With `npm run dev` running, open `/?debug`, load it in the console with `await import('/tools/playtest-bot.js')`, then run `__summarize(await __runBot({ runs: 3, maxSeconds: 300 }))`. It drives with real damage and reports spawns (including on-screen pop-ins), engagement, damage sources, deaths and kills.
+
 ## Optional global leaderboard
 
 Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` to use a Supabase table: `leaderboard(name text, time_ms int, score int, created_at timestamptz default now())`. Without these, the game uses a local leaderboard stored in the browser.

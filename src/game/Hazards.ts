@@ -288,6 +288,32 @@ export class HazardManager {
 
   /** Steering hint for AI: returns a lateral target that avoids blockers ahead, or null. */
   avoidLat(dist: number, lat: number, look: number): number | null {
+    // Barricade rows: steer for the actual gap instead of dodging one piece into its neighbour.
+    let rowDist = Infinity;
+    for (const h of this.barricades) {
+      if (!h.active || h.broken > 0) continue;
+      const dd = h.dist - dist;
+      if (dd > 0 && dd < look && h.dist < rowDist) rowDist = h.dist;
+    }
+    if (rowDist < Infinity) {
+      const covered: [number, number][] = [];
+      for (const h of this.barricades) {
+        if (h.active && h.broken === 0 && Math.abs(h.dist - rowDist) < 2.5) covered.push([h.lat - h.halfW - 1.1, h.lat + h.halfW + 1.1]);
+      }
+      const blocked = covered.some(([a, b]) => lat > a && lat < b);
+      if (blocked) {
+        covered.sort((x, y) => x[0] - y[0]);
+        const half = ROAD.halfWidth;
+        const gaps: number[] = [];
+        let cursor = -half;
+        for (const [a, b] of covered) {
+          if (a - cursor > 0.4) gaps.push((cursor + a) / 2);
+          cursor = Math.max(cursor, b);
+        }
+        if (half - cursor > 0.4) gaps.push((cursor + half) / 2);
+        if (gaps.length) return gaps.reduce((best, g) => (Math.abs(g - lat) < Math.abs(best - lat) ? g : best));
+      }
+    }
     for (const h of this.cones) {
       if (!h.active || h.broken > 0) continue;
       const dd = h.dist - dist;

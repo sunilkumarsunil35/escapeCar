@@ -215,9 +215,18 @@ export class Combat {
     const muzzle = p.muzzleWorld(this.muzzleIdx++, this.tmp);
     let end: THREE.Vector3;
     if (this.target && this.targetValid(this.target) && this.aligned) {
-      end = this.targetPos(this.target, this.tmp2).add(new THREE.Vector3(rand(-0.3, 0.3), rand(-0.2, 0.3), rand(-0.3, 0.3)));
-      this.hitTarget(this.target, this.weapon.damage, ctx);
-      ctx.fx.sparkBurst(end, null, 3, 0xffd060, 6, 1, 0.35, 0.2);
+      end = this.targetPos(this.target, this.tmp2);
+      // Spray-and-pray: every round hits up close, long shots mostly whiff (kills happen near the car).
+      const range = end.distanceTo(muzzle);
+      const hitChance = range < 12 ? 1 : Math.max(0.3, 1 - (range - 12) / 30);
+      if (Math.random() < hitChance) {
+        end.add(new THREE.Vector3(rand(-0.3, 0.3), rand(-0.2, 0.3), rand(-0.3, 0.3)));
+        this.hitTarget(this.target, this.weapon.damage, ctx);
+        ctx.fx.sparkBurst(end, null, 3, 0xffd060, 6, 1, 0.35, 0.2);
+      } else {
+        end.add(new THREE.Vector3(rand(-2.2, 2.2), rand(-0.9, 1.6), rand(-2.2, 2.2)));
+        if (end.y < 0.3) ctx.fx.sparkBurst(end.setY(0.05), new THREE.Vector3(0, 1, 0), 2, 0xffc050, 4, 0.8, 0.25, 0.15);
+      }
     } else {
       const dir = this.tmp2.set(0, 0, -1);
       if (p.turret) p.turret.getWorldDirection(dir).multiplyScalar(-1);

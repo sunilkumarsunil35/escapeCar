@@ -38,12 +38,18 @@ export class Director {
 
     this.spawnT -= dt;
     if (this.spawnT <= 0) {
-      this.spawnT = rand(1.6, 3.2) * (1.15 - this.heat.level * 0.1);
-      if (ctx.enemies.activeCount < this.heat.maxEnemies) {
+      this.spawnT = rand(1.2, 2.4) * (1.15 - this.heat.level * 0.1);
+      const free = this.heat.maxEnemies - ctx.enemies.activeCount;
+      if (free > 0) {
         const kinds = this.heat.kinds;
         let kind: EnemyKind = kinds[0];
         if (kinds.includes('enemy_sedan') && Math.random() < 0.4) kind = 'enemy_sedan';
-        if (!ctx.enemies.spawn(kind, ctx)) ctx.enemies.spawn(kind === 'enemy_bike' ? 'enemy_sedan' : 'enemy_bike', ctx);
+        const lead = ctx.enemies.spawn(kind, ctx) ?? ctx.enemies.spawn(kind === 'enemy_bike' ? 'enemy_sedan' : 'enemy_bike', ctx);
+        // Hitman bikes often roll in as a pack of 2-3, which reads as a real chase.
+        if (lead && lead.kind === 'enemy_bike' && lead.dist < ctx.player.dist && free > 1 && Math.random() < 0.6) {
+          const extra = Math.min(free - 1, Math.random() < 0.4 ? 2 : 1);
+          for (let i = 0; i < extra; i++) ctx.enemies.spawn('enemy_bike', ctx, lead);
+        }
       }
     }
     if (this.heat.chopper && !ctx.enemies.chopper.active) {

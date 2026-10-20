@@ -84,6 +84,7 @@ export class EnemyManager {
   chopper: Enemy;
   private strikes: Strike[] = [];
   private strikeTimer = 3;
+  private lastAmbushToast = -99;
   private tmp = new THREE.Vector3();
   private tmp2 = new THREE.Vector3();
 
@@ -119,6 +120,7 @@ export class EnemyManager {
       s.missile.visible = false;
     }
     this.strikeTimer = 3;
+    this.lastAmbushToast = -99;
   }
 
   get activeCount(): number {
@@ -133,24 +135,38 @@ export class EnemyManager {
     if (this.chopper.alive) yield this.chopper;
   }
 
-  spawn(kind: EnemyKind, ctx: GameCtx): boolean {
+  /** Spawns a chaser; `packFollow` places it just behind another for bike packs. */
+  spawn(kind: EnemyKind, ctx: GameCtx, packFollow: Enemy | null = null): Enemy | null {
     const e = this.list.find((x) => !x.active && x.kind === kind);
-    if (!e) return false;
+    if (!e) return null;
     const p = ctx.player;
-    // Ambushes: chasers also pull out of side streets ahead — almost always when the player has
-    // outrun everyone behind, so speed never empties the road of enemies.
+    // Most chasers roar up from behind (always off-screen). Ambushes pull out of side streets
+    // ahead, placed out of the camera's view (round a corner or far up the road) so they never
+    // pop into existence in plain sight.
     let chasersBehind = 0;
     for (const o of this.list) if (o.active && o.dist < p.dist && o.dist > p.dist - 45) chasersBehind++;
-    const fromAhead = Math.random() < (chasersBehind === 0 ? 0.75 : 0.35);
-    let dist = fromAhead ? p.dist + Math.max(70, p.vF * 2.6) + rand(0, 30) : p.dist - rand(38, 58);
+    const fromAhead = !packFollow && Math.random() < (chasersBehind === 0 ? 0.4 : 0.2);
+    let dist: number;
+    let lat: number;
+    if (fromAhead) {
+      const spot = this.hiddenAheadSpot(ctx);
+      dist = spot.dist;
+      lat = spot.lat;
+    } else {
+      dist = packFollow ? packFollow.dist - rand(4, 7) : p.dist - rand(34, 50);
+      const wall0 = ctx.track.wallAt(dist);
+      lat = packFollow ? clamp(packFollow.lat + rand(-4, 4), -wall0 + 2, wall0 - 2) : clamp(p.lat + rand(-8, 8), -wall0 + 2, wall0 - 2);
+    }
     dist = clamp(dist, ctx.track.backDist + 5, ctx.track.frontDist - 10);
     e.active = true;
     e.hp = e.def.hp;
     e.dist = dist;
-    const wall = ctx.track.wallAt(dist);
-    e.lat = fromAhead ? (Math.random() < 0.5 ? -1 : 1) * (wall - 1.6) : clamp(p.lat + rand(-8, 8), -wall + 2, wall - 2);
-    e.speed = fromAhead ? p.vF * 0.45 : p.vF + 6;
-    if (fromAhead && Math.random() < 0.4) ctx.toast(`${e.def.name.toUpperCase()} AMBUSH AHEAD!`, 'danger');
+    e.lat = lat;
+    e.speed = fromAhead ? p.vF * 0.2 : p.vF + 8;
+    if (fromAhead && ctx.time - this.lastAmbushToast > 18) {
+      this.lastAmbushToast = ctx.time;
+      ctx.toast(`${e.def.name.toUpperCase()} AMBUSH AHEAD!`, 'danger');
+    }
     e.latVel = 0;
     e.knock = 0;
     e.spin = 0;
@@ -164,7 +180,32 @@ export class EnemyManager {
     e.obj.visible = true;
     e.obj.scale.setScalar(1);
     e.obj.rotation.set(0, 0, 0);
-    return true;
+    return e;
+  }
+
+  /**
+   * Picks an ambush spot 110–200 m ahead on a curb that is outside the camera frustum (e.g. round
+   * a corner). On long straights nothing is hidden, so it falls back to the farthest candidate,
+   * where fog and distance make the arrival read as "pulling out far up the road".
+   */
+  private hiddenAheadSpot(ctx: GameCtx): { dist: number; lat: number } {
+    const p = ctx.player;
+    let best = { dist: p.dist + 150, lat: 0 };
+    let bestDist = -1;
+    for (let i = 0; i < 10; i++) {
+      const dist = Math.min(p.dist + rand(110, 200), ctx.track.frontDist - 12);
+      const wall = ctx.track.wallAt(dist);
+      const lat = (Math.random() < 0.5 ? -1 : 1) * (wall - 1.6);
+      ctx.track.sample(dist, lat, this.tmp);
+      this.tmp.y = 1.2;
+      const ndc = this.tmp.project(ctx.camera);
+      if (ndc.z > 1 || Math.abs(ndc.x) > 1.05 || Math.abs(ndc.y) > 1.05) return { dist, lat };
+      if (dist > bestDist) {
+        bestDist = dist;
+        best = { dist, lat };
+      }
+    }
+    return best;
   }
 
   spawnChopper(ctx: GameCtx): void {
