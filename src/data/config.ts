@@ -24,15 +24,15 @@ export interface CarDef {
 
 export const CARS: Record<CarId, CarDef> = {
   car_sedan: {
-    id: 'car_sedan', name: 'Classic Sedan', cost: 0, baseSpeed: 28, hp: 100, driftBoost: 1.0, chargeRate: 1.0, ramMult: 1,
+    id: 'car_sedan', name: 'Classic Sedan', cost: 0, baseSpeed: 30.8, hp: 100, driftBoost: 1.0, chargeRate: 1.0, ramMult: 1,
     trait: 'Balanced handling and acceleration.', color: 0xc8402c,
   },
   car_tuner: {
-    id: 'car_tuner', name: 'Street Tuner', cost: 2500, baseSpeed: 34, hp: 75, driftBoost: 1.35, chargeRate: 1.35, ramMult: 1,
+    id: 'car_tuner', name: 'Street Tuner', cost: 2500, baseSpeed: 37.4, hp: 75, driftBoost: 1.35, chargeRate: 1.35, ramMult: 1,
     trait: 'Charges drift boost 35% faster; low armor.', color: 0x0ea5b7,
   },
   car_truck: {
-    id: 'car_truck', name: 'Mafia Truck', cost: 5000, baseSpeed: 24, hp: 160, driftBoost: 0.8, chargeRate: 1.0, ramMult: 2,
+    id: 'car_truck', name: 'Mafia Truck', cost: 5000, baseSpeed: 26.4, hp: 160, driftBoost: 0.8, chargeRate: 1.0, ramMult: 2,
     trait: 'Deals 2x side-ram damage and shrugs off hits.', color: 0x3f4a3a,
   },
 };
@@ -138,7 +138,7 @@ export interface HeatDef {
 }
 
 export const HEAT_LEVELS: HeatDef[] = [
-  { level: 1, start: 0, maxEnemies: 3, kinds: ['enemy_bike'], barrels: false, ramps: false, barricades: false, chopper: false, preset: 'preset_morning', biome: 'city' },
+  { level: 1, start: 0, maxEnemies: 3, kinds: ['enemy_bike'], barrels: false, ramps: true, barricades: false, chopper: false, preset: 'preset_morning', biome: 'city' },
   { level: 2, start: 60, maxEnemies: 5, kinds: ['enemy_bike', 'enemy_sedan'], barrels: true, ramps: true, barricades: false, chopper: false, preset: 'preset_midday', biome: 'coastal' },
   { level: 3, start: 150, maxEnemies: 7, kinds: ['enemy_bike', 'enemy_sedan'], barrels: true, ramps: true, barricades: true, chopper: false, preset: 'preset_sunset', biome: 'city' },
   { level: 4, start: 240, maxEnemies: 8, kinds: ['enemy_bike', 'enemy_sedan'], barrels: true, ramps: true, barricades: true, chopper: true, preset: 'preset_night', biome: 'city' },

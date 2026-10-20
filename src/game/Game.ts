@@ -15,11 +15,13 @@ import { PlayerCar } from './PlayerCar';
 import { EnemyManager, type Enemy } from './Enemies';
 import { HazardManager } from './Hazards';
 import { Combat } from './Combat';
+import { Ambient } from './Ambient';
 import { Director } from './Director';
 import { CameraRig } from './CameraRig';
 import type { GameCtx } from './types';
 import type { Loadout } from './Loadout';
 import { Hud, stars } from '../ui/Hud';
+import { WATER_UNIFORMS } from '../core/Palette';
 
 export interface RunResult {
   time: number;
@@ -51,6 +53,7 @@ export class Game implements GameCtx {
   readonly enemies: EnemyManager;
   readonly hazards: HazardManager;
   readonly combat: Combat;
+  readonly ambient: Ambient;
   readonly director = new Director();
   readonly hud: Hud;
   private skyline: THREE.Group;
@@ -82,6 +85,7 @@ export class Game implements GameCtx {
     this.enemies = new EnemyManager(this.scene, assets, this.fx.rings);
     this.hazards = new HazardManager(this.scene, assets, this.physics, this.track);
     this.combat = new Combat(this.scene, assets);
+    this.ambient = new Ambient(this.scene, assets, engine.lowQuality);
     this.combat.ctx = this;
     this.hud = new Hud(uiRoot);
     this.hud.onPause = () => this.onPauseRequest?.();
@@ -187,6 +191,7 @@ export class Game implements GameCtx {
     this.fx.clear();
     this.enemies.reset();
     this.hazards.reset();
+    this.ambient.reset();
     this.director.reset();
     this.hazards.heat = HEAT_LEVELS[0];
     this.track.reset();
@@ -324,8 +329,10 @@ export class Game implements GameCtx {
     this.track.update(this.player.dist);
 
     if (!wrecking) this.director.update(sdt, this);
+    WATER_UNIFORMS.uTime.value += sdt;
     this.enemies.update(sdt, this);
     this.hazards.update(sdt, this);
+    this.ambient.update(sdt, this);
     this.combat.update(sdt, wrecking ? NEUTRAL : input, this);
     this.player.updateVisual(alpha, sdt, this.fx);
     this.fx.update(sdt);

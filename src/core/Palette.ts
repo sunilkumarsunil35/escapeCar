@@ -61,13 +61,39 @@ export const C = {
   skylineDark: 0x8f8a80,
 };
 
-export type Layer = 'lit' | 'glow' | 'window' | 'night';
+export type Layer = 'lit' | 'glow' | 'window' | 'night' | 'water';
+
+/** Shared clock for the animated ocean (advanced by the game loop). */
+export const WATER_UNIFORMS = { uTime: { value: 0 } };
+
+function makeWaterMaterial(): THREE.MeshStandardMaterial {
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.18, metalness: 0.2 });
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = WATER_UNIFORMS.uTime;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform float uTime;')
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        vec4 wpW = modelMatrix * vec4(transformed, 1.0);
+        // Waves calm down toward the shoreline (local x = distance from road centre).
+        float amp = clamp((position.x - 34.0) / 30.0, 0.12, 1.0);
+        float wave = sin(wpW.x * 0.11 + uTime * 1.25) * 0.34
+                   + sin(wpW.z * 0.17 - uTime * 1.65) * 0.24
+                   + sin((wpW.x + wpW.z) * 0.06 + uTime * 0.7) * 0.45;
+        transformed.y += wave * amp;`,
+      );
+  };
+  m.customProgramCacheKey = () => 'escape-water-v1';
+  return m;
+}
 
 /** Flat-shaded vertex-colored materials shared across all merged meshes (one draw call per layer per model). */
 export const MATS = {
   lit: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.82, metalness: 0.04 }),
   glow: new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }),
   window: new THREE.MeshBasicMaterial({ vertexColors: true, color: 0x5b6f86 }),
+  water: makeWaterMaterial(),
   night: new THREE.MeshBasicMaterial({
     vertexColors: true,
     transparent: true,

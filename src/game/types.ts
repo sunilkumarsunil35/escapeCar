@@ -5,6 +5,7 @@ import type { Effects } from './Effects';
 import type { EnemyManager, Enemy } from './Enemies';
 import type { HazardManager } from './Hazards';
 import type { Combat } from './Combat';
+import type { Ambient } from './Ambient';
 import type { HeatDef, PowerupId } from '../data/config';
 
 /** Shared runtime context passed to every gameplay system each frame. */
@@ -15,6 +16,7 @@ export interface GameCtx {
   enemies: EnemyManager;
   hazards: HazardManager;
   combat: Combat;
+  ambient: Ambient;
   camera: THREE.PerspectiveCamera;
   heat: HeatDef;
   time: number;

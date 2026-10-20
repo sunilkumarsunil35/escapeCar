@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GADGETS, WEAPONS, type GadgetDef, type WeaponDef } from '../data/config';
-import { damp, DEG, rand, wrapAngle } from '../core/math';
+import { damp, dampAngle, DEG, rand, wrapAngle } from '../core/math';
 import type { AssetRegistry } from '../assets/AssetRegistry';
 import type { FrameInput } from '../input/Input';
 import type { GameCtx } from './types';
@@ -54,6 +54,8 @@ export class Combat {
   private oils: Oil[] = [];
   private turretYaw = 0;
   private turretPitch = 0;
+  /** True once the turret has swung onto the current target (hits only land when aligned). */
+  private aligned = false;
   private tmp = new THREE.Vector3();
   private tmp2 = new THREE.Vector3();
   private aim = new THREE.Vector3();
@@ -133,8 +135,11 @@ export class Combat {
       const d = Math.hypot(dx, dz);
       if (d > range * rangeMul || d < 1) return;
       const ang = Math.abs(wrapAngle(Math.atan2(-dx, -dz) - yaw));
-      if (ang > halfCone) return;
-      let score = d + ang * 12 + bias;
+      // 360° roof turret: the weapon cone is a priority zone; flankers and chasers outside it are
+      // still engaged (at slightly reduced range) because that's where pursuers actually sit.
+      const inCone = ang <= halfCone;
+      if (!inCone && d > range * rangeMul * 0.85) return;
+      let score = d + (inCone ? ang * 6 : 12 + ang * 4) + bias;
       if (this.target && this.sameTarget(this.target, t)) score -= 8;
       if (score < bestScore) {
         bestScore = score;
@@ -177,7 +182,8 @@ export class Combat {
       aimYaw = Math.atan2(-local.x, -local.z);
       aimPitch = Math.atan2(local.y, Math.hypot(local.x, local.z));
     }
-    this.turretYaw = damp(this.turretYaw, aimYaw, 14, dt);
+    this.turretYaw = dampAngle(this.turretYaw, aimYaw, 16, dt);
+    this.aligned = this.target !== null && Math.abs(wrapAngle(this.turretYaw - aimYaw)) < 0.45;
     this.turretPitch = damp(this.turretPitch, Math.max(-0.2, Math.min(0.6, aimPitch)), 10, dt);
     if (p.turret) {
       p.turret.rotation.set(0, 0, 0);
@@ -208,7 +214,7 @@ export class Combat {
     const p = ctx.player;
     const muzzle = p.muzzleWorld(this.muzzleIdx++, this.tmp);
     let end: THREE.Vector3;
-    if (this.target && this.targetValid(this.target)) {
+    if (this.target && this.targetValid(this.target) && this.aligned) {
       end = this.targetPos(this.target, this.tmp2).add(new THREE.Vector3(rand(-0.3, 0.3), rand(-0.2, 0.3), rand(-0.3, 0.3)));
       this.hitTarget(this.target, this.weapon.damage, ctx);
       ctx.fx.sparkBurst(end, null, 3, 0xffd060, 6, 1, 0.35, 0.2);
@@ -386,6 +392,7 @@ export class Combat {
     const c = ctx.enemies.chopper;
     if (c.alive && c.aimPos.distanceTo(pos) < radius + 2) ctx.enemies.damage(c, enemyDamage, ctx);
     if (chain) ctx.hazards.chainBarrels(pos, radius);
+    ctx.ambient.blast(pos, radius);
     if (playerDamage > 0 && !ctx.player.dead) {
       const dx = ctx.player.renderPos.x - pos.x;
       const dz = ctx.player.renderPos.z - pos.z;

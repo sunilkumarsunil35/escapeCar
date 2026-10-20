@@ -23,7 +23,7 @@ const tmpC = new THREE.Color();
  * chunk renders in 1–4 draw calls and shares the global palette materials.
  */
 export class GeoBuilder {
-  private parts: Record<Layer, THREE.BufferGeometry[]> = { lit: [], glow: [], window: [], night: [] };
+  private parts: Record<Layer, THREE.BufferGeometry[]> = { lit: [], glow: [], window: [], night: [], water: [] };
   /** Optional parent transform applied to every subsequent part (used to build along curves). */
   frame: THREE.Matrix4 | null = null;
 
@@ -128,7 +128,7 @@ export class GeoBuilder {
   build(opts: { castShadow?: boolean; receiveShadow?: boolean; name?: string } = {}): THREE.Group {
     const group = new THREE.Group();
     if (opts.name) group.name = opts.name;
-    (['lit', 'window', 'glow', 'night'] as Layer[]).forEach((layer) => {
+    (['lit', 'water', 'window', 'glow', 'night'] as Layer[]).forEach((layer) => {
       const geo = this.buildGeometry(layer);
       if (!geo) return;
       const mesh = new THREE.Mesh(geo, MATS[layer]);
@@ -138,6 +138,7 @@ export class GeoBuilder {
         mesh.receiveShadow = opts.receiveShadow ?? true;
       }
       if (layer === 'night') mesh.renderOrder = 5;
+      if (layer === 'water') mesh.receiveShadow = true;
       group.add(mesh);
     });
     return group;

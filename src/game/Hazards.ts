@@ -73,7 +73,7 @@ export class HazardManager {
     for (let i = 0; i < 16; i++) this.barricades.push(mk('barricade', 'obstacle_barricade', bc[0] / 2, bc[2] / 2));
     for (let i = 0; i < 18; i++) this.barrels.push(mk('barrel', 'obstacle_barrel', br[0] / 2, br[2] / 2));
     this.blockers = [...this.barricades, ...this.barrels];
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 8; i++) {
       const h = mk('ramp', 'obstacle_ramp', 2, 3);
       h.body = physics.world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, -60, 0));
       const hull = RAPIER.ColliderDesc.convexHull(rampHullPoints());
@@ -215,31 +215,42 @@ export class HazardManager {
     const straight = c.turn === 0;
     const lane = pick(ROAD.lanes);
     const r = Math.random();
-    if (r < 0.22 || !straight) {
+    if (straight && heat.ramps && r < 0.34) {
+      // Jump ramps (often a pair) with a cash arc in the air; later heats park a roadblock behind them.
+      const lanes = chance(0.4) ? [lane, ROAD.lanes[(ROAD.lanes.indexOf(lane) + 2) % 4]] : [lane];
+      for (const l of lanes) {
+        this.placeHazard(this.ramps, s0 + 8, l);
+        for (let i = 0; i < 4; i++) this.placeCash(s0 + 18 + i * 5, l, 2.4 + Math.sin((i / 3) * Math.PI) * 1.4);
+      }
+      if (heat.barricades && chance(0.6)) this.barricadeRow(s0 + 30, c.wall);
+      else if (heat.barrels && chance(0.5)) for (let i = 0; i < 3; i++) this.placeHazard(this.barrels, s0 + 27, lane + (i - 1) * 1.0);
+      return;
+    }
+    if (r < 0.5 || !straight) {
       const l = pick(ROAD.lanes);
       for (let i = 0; i < 5; i++) this.placeCash(s0 + 10 + i * 5, l);
       if (!straight && chance(0.25)) this.placePowerup(s0 + 40, pick(ROAD.lanes), heat.level);
       return;
     }
-    if (r < 0.42 && heat.barrels) {
+    if (r < 0.64 && heat.barrels) {
       const baseLat = pick([-6, -2, 2, 6]);
       const n = 3 + Math.floor(Math.random() * 2);
       for (let i = 0; i < n; i++) this.placeHazard(this.barrels, s0 + 22 + rand(-1.5, 1.5), baseLat + (i - n / 2) * 1.0);
       this.placeCash(s0 + 36, -baseLat * 0.5);
       return;
     }
-    if (r < 0.6 && heat.ramps) {
+    if (r < 0.72 && heat.ramps) {
       this.placeHazard(this.ramps, s0 + 8, lane);
       for (let i = 0; i < 4; i++) this.placeCash(s0 + 18 + i * 5, lane, 2.4 + Math.sin((i / 3) * Math.PI) * 1.4);
       if (heat.barricades) this.barricadeRow(s0 + 30, c.wall);
       else if (heat.barrels) for (let i = 0; i < 3; i++) this.placeHazard(this.barrels, s0 + 26, lane + (i - 1) * 1.0);
       return;
     }
-    if (r < 0.78 && heat.barricades) {
+    if (r < 0.84 && heat.barricades) {
       this.barricadeRow(s0 + 25, c.wall);
       return;
     }
-    if (r < 0.9) {
+    if (r < 0.94) {
       this.placePowerup(s0 + 25, lane, heat.level);
       return;
     }
@@ -260,6 +271,11 @@ export class HazardManager {
       if (!h.active || h.broken > 0) continue;
       const dd = h.dist - dist;
       if (dd > 0 && dd < look * 0.7 && Math.abs(h.lat - lat) < 1.8) return h.lat + (h.lat > lat ? -2.5 : 2.5);
+    }
+    for (const h of this.ramps) {
+      if (!h.active) continue;
+      const dd = h.dist - dist;
+      if (dd > -h.halfL && dd < look && Math.abs(h.lat - lat) < h.halfW + 1.4) return h.lat + (h.lat > lat ? -1 : 1) * (h.halfW + 2.4);
     }
     return null;
   }

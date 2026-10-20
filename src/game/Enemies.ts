@@ -251,7 +251,8 @@ export class EnemyManager {
       } else {
         e.spinAngle = damp(e.spinAngle, Math.round(e.spinAngle / (Math.PI * 2)) * Math.PI * 2, 4, dt);
         const isBike = e.kind === 'enemy_bike';
-        const offset = isBike ? -0.4 + Math.sin(ctx.time * 0.7 + e.seed) * 1.4 : -11 + Math.sin(ctx.time * 0.4 + e.seed) * 4;
+        // Bikes ride beside the doors; sedans alternate between tailing and surging up alongside / ahead.
+        const offset = isBike ? -0.4 + Math.sin(ctx.time * 0.7 + e.seed) * 1.6 : -3 + Math.sin(ctx.time * 0.35 + e.seed) * 9;
         let targetLat = p.lat + e.side * (isBike ? 3.0 : 4.6);
         if (Math.abs(targetLat) > wall - 0.5) {
           e.side *= -1;

@@ -10,6 +10,7 @@ import {
   buildTommy, buildRocketPod, buildMissile, buildCash, buildWrench, buildNitro, buildMagnet, buildBarricade, buildBarrel, buildRamp,
 } from './procedural/items';
 import { buildChunkTemplate, buildGarage } from './procedural/environment';
+import { buildCivilian, buildPedestrian, TAXI_YELLOW } from './procedural/ambient';
 
 export type Category = 'cars' | 'enemies' | 'weapons' | 'pickups' | 'environment';
 export const CATEGORIES: Category[] = ['cars', 'enemies', 'weapons', 'pickups', 'environment'];
@@ -72,6 +73,11 @@ export const DEFAULT_MANIFEST: Manifest = {
     obstacle_barrel: { url: null, scale: 1, rotationY: 0, collider: [0.8, 1.2, 0.8] },
     obstacle_ramp: { url: null, scale: 1, rotationY: 0, collider: [4.0, 1.6, 6.0] },
     env_garage: { url: null, scale: 1, rotationY: 0, sockets: { turntable_center: [0, 0, 0] } },
+    traffic_civilian: {
+      url: null, scale: 1, rotationY: 0, collider: [2.0, 0.8, 4.2],
+      sockets: { wheel_FL: [-0.86, 0.42, -1.3], wheel_FR: [0.86, 0.42, -1.3], wheel_RL: [-0.86, 0.42, 1.3], wheel_RR: [0.86, 0.42, 1.3] },
+    },
+    npc_pedestrian: { url: null, scale: 1, rotationY: 0 },
   },
 };
 
@@ -81,6 +87,7 @@ export const REQUIRED_SOCKETS: Record<string, string[]> = {
   car_tuner: ['socket_roof_weapon', 'socket_front_armor', 'wheel_FL', 'wheel_FR', 'wheel_RL', 'wheel_RR'],
   car_truck: ['socket_roof_weapon', 'socket_front_armor', 'wheel_FL', 'wheel_FR', 'wheel_RL', 'wheel_RR'],
   enemy_sedan: ['wheel_FL', 'wheel_FR', 'wheel_RL', 'wheel_RR'],
+  traffic_civilian: ['wheel_FL', 'wheel_FR', 'wheel_RL', 'wheel_RR'],
   enemy_chopper: ['rotor_main', 'rotor_tail'],
   weapon_tommy: ['muzzle_L', 'muzzle_R'],
   weapon_rocket: ['muzzle_center'],
@@ -89,6 +96,8 @@ export const REQUIRED_SOCKETS: Record<string, string[]> = {
 
 export interface InstantiateOpts {
   color?: number;
+  /** Variation seed for procedural NPCs (pedestrian outfits). */
+  seed?: number;
   wheelStyle?: WheelStyle;
 }
 
@@ -282,6 +291,10 @@ export class AssetRegistry {
         return buildChunkTemplate('highway', 301);
       case 'env_garage':
         return buildGarage();
+      case 'traffic_civilian':
+        return buildCivilian(sockets, opts.color ?? TAXI_YELLOW);
+      case 'npc_pedestrian':
+        return buildPedestrian(opts.seed ?? 1);
       default: {
         const g = new THREE.Group();
         g.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0xff00ff, flatShading: true })));
