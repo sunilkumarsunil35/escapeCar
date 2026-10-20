@@ -47,6 +47,8 @@ export class PlayerCar {
   drift = { active: false, pending: false, pendingT: 0, dir: 0, charge: 0, tier: 0 };
   boost = { time: 0, speed: 0, tier: 0 };
   nitro = 0;
+  /** Banked nitro boosts fired on demand. */
+  nitroCharges = 1;
   magnet = 0;
   reversing = false;
   braking = false;
@@ -138,6 +140,7 @@ export class PlayerCar {
     this.drift = { active: false, pending: false, pendingT: 0, dir: 0, charge: 0, tier: 0 };
     this.boost = { time: 0, speed: 0, tier: 0 };
     this.nitro = 0;
+    this.nitroCharges = 1;
     this.magnet = 0;
     this.dead = false;
     this.grounded = true;
@@ -402,6 +405,18 @@ export class PlayerCar {
       }
     }
     if (this.dead) return;
+
+    // --- Damage: grey engine smoke under 50% HP, black smoke + flames under 25% ---
+    const hpFrac = this.hp / this.stats.maxHp;
+    if (hpFrac < 0.5) {
+      const severe = hpFrac < 0.25;
+      if (Math.random() < dt * (severe ? 28 : 14)) {
+        this.root.localToWorld(this.tmp2.set(rand(-0.3, 0.3), 1.05, -this.halfExt.z * 0.65));
+        const drift = this.tmp.set(Math.sin(this.yaw) * 4, rand(1.5, 3), Math.cos(this.yaw) * 4);
+        fx.puff(this.tmp2, drift, severe ? rand(0.45, 0.8) : rand(0.3, 0.55), rand(0.8, 1.3), severe ? 0x2a2a2a : 0x9a9a9a);
+        if (severe && Math.random() < 0.45) fx.flame(this.tmp2, drift.multiplyScalar(0.4), rand(0.25, 0.45), 0.3);
+      }
+    }
 
     // --- Drift / boost effects ---
     this.fxTimer -= dt;

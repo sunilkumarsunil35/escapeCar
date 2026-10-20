@@ -84,6 +84,7 @@ export class PeerHost implements RemoteSource {
           gadget: Boolean(p.gadget),
           reverse: Boolean(p.reverse),
           recenter: Boolean(p.recenter),
+          nitro: Boolean(p.nitro),
         };
         this.lastAt = performance.now();
       }

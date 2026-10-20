@@ -238,3 +238,4 @@ export const PLAYER_TUNING = {
 export const PICKUP_CASH_VALUE = 25;
 export const NEAR_MISS_BONUS = 25;
 export const MAGNET_RADIUS = 25;
+export const NITRO_MAX_CHARGES = 3;

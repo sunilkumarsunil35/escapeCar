@@ -137,15 +137,20 @@ export class EnemyManager {
     const e = this.list.find((x) => !x.active && x.kind === kind);
     if (!e) return false;
     const p = ctx.player;
-    const fromAhead = kind === 'enemy_bike' && Math.random() < 0.2;
-    let dist = fromAhead ? p.dist + rand(60, 80) : p.dist - rand(38, 58);
+    // Ambushes: chasers also pull out of side streets ahead — almost always when the player has
+    // outrun everyone behind, so speed never empties the road of enemies.
+    let chasersBehind = 0;
+    for (const o of this.list) if (o.active && o.dist < p.dist && o.dist > p.dist - 45) chasersBehind++;
+    const fromAhead = Math.random() < (chasersBehind === 0 ? 0.75 : 0.35);
+    let dist = fromAhead ? p.dist + Math.max(70, p.vF * 2.6) + rand(0, 30) : p.dist - rand(38, 58);
     dist = clamp(dist, ctx.track.backDist + 5, ctx.track.frontDist - 10);
     e.active = true;
     e.hp = e.def.hp;
     e.dist = dist;
     const wall = ctx.track.wallAt(dist);
-    e.lat = clamp(p.lat + rand(-8, 8), -wall + 2, wall - 2);
-    e.speed = fromAhead ? p.vF * 0.6 : p.vF + 6;
+    e.lat = fromAhead ? (Math.random() < 0.5 ? -1 : 1) * (wall - 1.6) : clamp(p.lat + rand(-8, 8), -wall + 2, wall - 2);
+    e.speed = fromAhead ? p.vF * 0.45 : p.vF + 6;
+    if (fromAhead && Math.random() < 0.4) ctx.toast(`${e.def.name.toUpperCase()} AMBUSH AHEAD!`, 'danger');
     e.latVel = 0;
     e.knock = 0;
     e.spin = 0;
@@ -235,7 +240,7 @@ export class EnemyManager {
         continue;
       }
       // Despawn when hopelessly far
-      if (e.dist < p.dist - 140 || e.dist < track.backDist + 1 || e.dist > track.frontDist - 2) {
+      if (e.dist < p.dist - 110 || e.dist < track.backDist + 1 || e.dist > track.frontDist - 2) {
         e.active = false;
         e.obj.visible = false;
         continue;

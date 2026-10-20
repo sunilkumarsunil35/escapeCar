@@ -23,8 +23,8 @@ export class Hud {
   private boostEl: HTMLDivElement;
   private linkEl: HTMLDivElement;
   private hint: HTMLDivElement;
-  private gadgetEl: HTMLDivElement;
-  private last = { hp: -1, cash: -1, heat: -1, time: -1, boss: -2, gadget: '' };
+  private chips: Record<'weapon' | 'gadget' | 'nitro', { el: HTMLDivElement; fill: HTMLDivElement; val: HTMLElement; ready: boolean | null; text: string }>;
+  private last = { hp: -1, cash: -1, heat: -1, time: -1, boss: -2 };
   private bannerTimer = 0;
   onPause: (() => void) | null = null;
 
@@ -44,12 +44,16 @@ export class Hud {
       <div class="hud-banner"></div>
       <div class="hud-toasts"></div>
       <div class="hud-boost"></div>
-      <div class="hud-gadget-kb"></div>
+      <div class="hud-loadout">
+        <div class="hud-chip weapon"><div class="hud-chip-fill"></div><span class="hud-chip-key">J</span><i>GUN</i><b></b></div>
+        <div class="hud-chip gadget"><div class="hud-chip-fill"></div><span class="hud-chip-key">E</span><i>GADGET</i><b></b></div>
+        <div class="hud-chip nitro"><div class="hud-chip-fill"></div><span class="hud-chip-key">W</span><i>NITRO</i><b></b></div>
+      </div>
       <div class="hud-arrow left">❮❮</div>
       <div class="hud-arrow right">❯❯</div>
       <div class="hud-arrow bottom">︾</div>
       <div class="hud-vignette"></div>
-      <div class="hud-hint">${IS_TOUCH ? 'TILT TO STEER · LEFT THUMB DRIFT · RIGHT THUMB FIRE / GADGET' : 'A/D STEER · SPACE HOP+DRIFT · J / CLICK FIRE · E GADGET · S REVERSE · ESC PAUSE'}</div>`;
+      <div class="hud-hint">${IS_TOUCH ? 'SLIDE LEFT PAD TO STEER · DRIFT / NITRO / GADGET ON THE RIGHT · GUN AUTO-FIRES' : 'A/D STEER · SPACE DRIFT · J/CLICK FIRE · E GADGET · W NITRO · S REVERSE · ESC PAUSE'}</div>`;
     root.appendChild(this.el);
     const q = <T extends HTMLElement>(s: string): T => this.el.querySelector(s) as T;
     this.hpFill = q('.hud-hp-fill');
@@ -65,7 +69,11 @@ export class Hud {
     this.boostEl = q('.hud-boost');
     this.linkEl = q('.hud-link');
     this.hint = q('.hud-hint');
-    this.gadgetEl = q('.hud-gadget-kb');
+    const chip = (sel: string) => {
+      const el = q<HTMLDivElement>(sel);
+      return { el, fill: el.querySelector('.hud-chip-fill') as HTMLDivElement, val: el.querySelector('b') as HTMLElement, ready: null as boolean | null, text: '' };
+    };
+    this.chips = { weapon: chip('.hud-chip.weapon'), gadget: chip('.hud-chip.gadget'), nitro: chip('.hud-chip.nitro') };
     this.arrows = { left: q('.hud-arrow.left'), right: q('.hud-arrow.right'), bottom: q('.hud-arrow.bottom') };
     q<HTMLButtonElement>('.hud-pause').addEventListener('click', () => this.onPause?.());
   }
@@ -73,7 +81,8 @@ export class Hud {
   show(v: boolean): void {
     this.el.classList.toggle('hidden', !v);
     if (v) {
-      this.last = { hp: -1, cash: -1, heat: -1, time: -1, boss: -2, gadget: '' };
+      this.last = { hp: -1, cash: -1, heat: -1, time: -1, boss: -2 };
+      for (const c of Object.values(this.chips)) c.ready = null;
       this.hint.classList.remove('fade');
       setTimeout(() => this.hint.classList.add('fade'), 7000);
       this.toasts.innerHTML = '';
@@ -85,7 +94,7 @@ export class Hud {
     this.linkEl.classList.toggle('hidden', !linked);
   }
 
-  update(dt: number, s: { hp: number; maxHp: number; cash: number; heat: number; time: number; boss: number | null; boostTier: number; gadgetText: string }): void {
+  update(dt: number, s: { hp: number; maxHp: number; cash: number; heat: number; time: number; boss: number | null; boostTier: number }): void {
     const hpPct = Math.round((s.hp / s.maxHp) * 100);
     if (hpPct !== this.last.hp) {
       this.last.hp = hpPct;
@@ -120,13 +129,34 @@ export class Hud {
       if (boss >= 0) this.bossFill.style.width = `${boss}%`;
     }
     this.boostEl.className = `hud-boost tier${s.boostTier}`;
-    if (s.gadgetText !== this.last.gadget) {
-      this.last.gadget = s.gadgetText;
-      this.gadgetEl.textContent = s.gadgetText;
-    }
+
     if (this.bannerTimer > 0) {
       this.bannerTimer -= dt;
       if (this.bannerTimer <= 0) this.banner.classList.remove('show');
+    }
+  }
+
+  /**
+   * Cooldown chip: fill 0..1 (1 = ready). Flashes when it becomes ready so reloads are readable at a glance.
+   */
+  setChip(which: 'weapon' | 'gadget' | 'nitro', name: string, fill: number, text: string, ready: boolean): void {
+    const c = this.chips[which];
+    c.fill.style.transform = 'scaleX(' + Math.max(0, Math.min(1, fill)).toFixed(3) + ')';
+    const label = name + '|' + text;
+    if (label !== c.text) {
+      c.text = label;
+      (c.el.querySelector('i') as HTMLElement).textContent = name;
+      c.val.textContent = text;
+    }
+    if (ready !== c.ready) {
+      if (ready && c.ready === false) {
+        c.el.classList.remove('flash');
+        void c.el.offsetWidth;
+        c.el.classList.add('flash');
+      }
+      c.ready = ready;
+      c.el.classList.toggle('ready', ready);
+      c.el.classList.toggle('cooling', !ready);
     }
   }
 

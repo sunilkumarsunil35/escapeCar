@@ -117,6 +117,11 @@ export class Ambient {
     this.civT = 1;
   }
 
+  /** Civilian cars currently driving (track-space), for hazards they may clip. */
+  *solidBodies(): Generator<{ dist: number; lat: number }> {
+    for (const c of this.civs) if (c.active && c.smashed <= 0) yield c;
+  }
+
   /** Explosion knock-on: nearby civilian cars get flipped away. */
   blast(pos: THREE.Vector3, radius: number): void {
     for (const c of this.civs) {

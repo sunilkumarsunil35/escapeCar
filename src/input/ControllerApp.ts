@@ -13,6 +13,7 @@ export class ControllerApp {
   private conn: DataConnection | null = null;
   private state = { drift: false, shoot: false, gadget: false, recenter: false };
   private gadgetHoldFrames = 0;
+  private nitroHoldFrames = 0;
   private recenterFrames = 0;
   private statusEl!: HTMLDivElement;
   private steerFill!: HTMLDivElement;
@@ -36,7 +37,10 @@ export class ControllerApp {
         <div class="ctl-body">
           <div class="ctl-zone ctl-drift">HOLD TO DRIFT<small>LEFT THUMB · BRAKE</small></div>
           <div class="ctl-right">
-            <div class="ctl-zone ctl-gadget">DROP GADGET</div>
+            <div class="ctl-row">
+              <div class="ctl-zone ctl-gadget">GADGET</div>
+              <div class="ctl-zone ctl-nitro">NITRO</div>
+            </div>
             <div class="ctl-zone ctl-shoot">HOLD TO SHOOT</div>
           </div>
         </div>
@@ -72,14 +76,18 @@ export class ControllerApp {
     });
     this.bindZone('.ctl-drift', 'drift');
     this.bindZone('.ctl-shoot', 'shoot');
-    const gadget = this.root.querySelector('.ctl-gadget') as HTMLDivElement;
-    gadget.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      this.gadgetHoldFrames = 6;
-      gadget.classList.add('active');
-      navigator.vibrate?.(20);
-      setTimeout(() => gadget.classList.remove('active'), 150);
-    });
+    const tap = (sel: string, onTap: () => void): void => {
+      const el = this.root.querySelector(sel) as HTMLDivElement;
+      el.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        onTap();
+        el.classList.add('active');
+        navigator.vibrate?.(20);
+        setTimeout(() => el.classList.remove('active'), 150);
+      });
+    };
+    tap('.ctl-gadget', () => (this.gadgetHoldFrames = 6));
+    tap('.ctl-nitro', () => (this.nitroHoldFrames = 6));
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') void this.requestWakeLock();
     });
@@ -189,10 +197,12 @@ export class ControllerApp {
       drift: this.state.drift,
       shoot: this.state.shoot,
       gadget: this.gadgetHoldFrames > 0,
+      nitro: this.nitroHoldFrames > 0,
       reverse: this.state.drift && this.state.shoot,
       recenter: this.recenterFrames > 0,
     };
     if (this.gadgetHoldFrames > 0) this.gadgetHoldFrames--;
+    if (this.nitroHoldFrames > 0) this.nitroHoldFrames--;
     if (this.recenterFrames > 0) this.recenterFrames--;
     if (this.conn?.open) this.conn.send(payload);
   }

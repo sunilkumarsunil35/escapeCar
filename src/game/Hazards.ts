@@ -9,7 +9,7 @@ import type { Track, Chunk } from './Track';
 import type { GameCtx } from './types';
 import { audio } from '../core/Audio';
 
-type HazardKind = 'barricade' | 'barrel' | 'ramp';
+type HazardKind = 'barricade' | 'barrel' | 'ramp' | 'cone';
 
 export interface Hazard {
   kind: HazardKind;
@@ -51,6 +51,7 @@ export class HazardManager {
   private barricades: Hazard[] = [];
   private barrels: Hazard[] = [];
   private ramps: Hazard[] = [];
+  private cones: Hazard[] = [];
   /** Barricades + barrels, pre-joined so the per-frame loop allocates nothing. */
   private blockers: Hazard[] = [];
   private cash: Pickup[] = [];
@@ -72,7 +73,9 @@ export class HazardManager {
     const br = assets.config('obstacle_barrel').collider ?? [0.8, 1.2, 0.8];
     for (let i = 0; i < 16; i++) this.barricades.push(mk('barricade', 'obstacle_barricade', bc[0] / 2, bc[2] / 2));
     for (let i = 0; i < 18; i++) this.barrels.push(mk('barrel', 'obstacle_barrel', br[0] / 2, br[2] / 2));
-    this.blockers = [...this.barricades, ...this.barrels];
+    const cc = assets.config('obstacle_cone').collider ?? [0.6, 0.9, 0.6];
+    for (let i = 0; i < 44; i++) this.cones.push(mk('cone', 'obstacle_cone', cc[0] / 2, cc[2] / 2));
+    this.blockers = [...this.barricades, ...this.barrels, ...this.cones];
     for (let i = 0; i < 8; i++) {
       const h = mk('ramp', 'obstacle_ramp', 2, 3);
       h.body = physics.world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, -60, 0));
@@ -110,7 +113,7 @@ export class HazardManager {
   }
 
   reset(): void {
-    for (const h of [...this.barricades, ...this.barrels, ...this.ramps]) this.deactivate(h);
+    for (const h of [...this.barricades, ...this.barrels, ...this.ramps, ...this.cones]) this.deactivate(h);
     for (const p of [...this.cash, ...this.powerups]) this.hidePickup(p);
   }
 
@@ -215,6 +218,10 @@ export class HazardManager {
     const straight = c.turn === 0;
     const lane = pick(ROAD.lanes);
     const r = Math.random();
+    if (straight && r >= 0.34 && r < 0.46) {
+      this.chicane(s0);
+      return;
+    }
     if (straight && heat.ramps && r < 0.34) {
       // Jump ramps (often a pair) with a cash arc in the air; later heats park a roadblock behind them.
       const lanes = chance(0.4) ? [lane, ROAD.lanes[(ROAD.lanes.indexOf(lane) + 2) % 4]] : [lane];
@@ -257,8 +264,35 @@ export class HazardManager {
     for (let i = 0; i < 5; i++) this.placeCash(s0 + 8 + i * 6, ROAD.lanes[i % 4]);
   }
 
+  /**
+   * Construction zone: cones close the left two lanes, then the right two, forcing an S-weave.
+   * A barricade inside each closure marks the road works.
+   */
+  private chicane(s0: number): void {
+    const first = Math.random() < 0.5 ? -1 : 1;
+    const closure = (side: number, sStart: number): void => {
+      const outer = side * 9.6;
+      const inner = side * 0.4;
+      const taper = 6;
+      const len = 10;
+      for (let s = 0; s <= taper; s += 2) this.placeHazard(this.cones, s0 + sStart + s, outer + (inner - outer) * (s / taper));
+      for (let s = taper + 2.2; s <= taper + len; s += 2.2) this.placeHazard(this.cones, s0 + sStart + s, inner);
+      for (let s = 0; s <= 4; s += 2) this.placeHazard(this.cones, s0 + sStart + taper + len + 2 + s, inner + (outer - inner) * (s / 4));
+      this.placeHazard(this.barricades, s0 + sStart + 9, side * 5);
+    };
+    closure(first, 4);
+    closure(-first, 27);
+    this.placeCash(s0 + 22, -first * 2.5);
+    this.placeCash(s0 + 45, first * 2.5);
+  }
+
   /** Steering hint for AI: returns a lateral target that avoids blockers ahead, or null. */
   avoidLat(dist: number, lat: number, look: number): number | null {
+    for (const h of this.cones) {
+      if (!h.active || h.broken > 0) continue;
+      const dd = h.dist - dist;
+      if (dd > 0 && dd < look && Math.abs(h.lat - lat) < 1.6) return h.lat + (h.lat > lat ? -2.4 : 2.4);
+    }
     for (const h of this.barricades) {
       if (!h.active || h.broken > 0) continue;
       const dd = h.dist - dist;
@@ -353,6 +387,16 @@ export class HazardManager {
         this.deactivate(h);
         continue;
       }
+      if (h.kind === 'cone') {
+        // Traffic & chasers clip cones too
+        for (const c of ctx.ambient.solidBodies()) {
+          if (Math.abs(c.dist - h.dist) < 2.2 && Math.abs(c.lat - h.lat) < 1.2) {
+            this.smash(h, new THREE.Vector3(0, 0, 0));
+            break;
+          }
+        }
+        if (h.broken > 0) continue;
+      }
       if (h.kind === 'barrel' && h.fuse > 0) {
         h.fuse -= dt;
         if (h.fuse <= 0) {
@@ -370,7 +414,11 @@ export class HazardManager {
       const dl = h.lat - p.lat;
       if (playerLow && !p.dead && Math.abs(dd) < h.halfL + p.halfLength * 0.9 && Math.abs(dl) < h.halfW + p.halfWidth - 0.15) {
         const fwd = new THREE.Vector3(-Math.sin(p.yaw), 0, -Math.cos(p.yaw)).multiplyScalar(p.vF * 0.6);
-        if (h.kind === 'barricade') {
+        if (h.kind === 'cone') {
+          this.smash(h, fwd.multiplyScalar(0.7));
+          p.vF *= 0.97;
+          if (Math.random() < 0.5) audio.scrape();
+        } else if (h.kind === 'barricade') {
           audio.hit();
           this.smash(h, fwd);
           ctx.fx.sparkBurst(this.tmp.copy(h.pos).setY(0.8), null, 12, 0xffb040, 10, 1, 0.5, 0.35);
@@ -393,7 +441,9 @@ export class HazardManager {
       for (const e of ctx.enemies.list) {
         if (!e.alive) continue;
         if (Math.abs(h.dist - e.dist) < h.halfL + e.def.halfL && Math.abs(h.lat - e.lat) < h.halfW + e.def.halfW) {
-          if (h.kind === 'barricade') {
+          if (h.kind === 'cone') {
+            this.smash(h, new THREE.Vector3(0, 0, 0));
+          } else if (h.kind === 'barricade') {
             this.smash(h, new THREE.Vector3(0, 0, 0));
             ctx.enemies.damage(e, 25, ctx);
             e.speed *= 0.5;
@@ -404,7 +454,7 @@ export class HazardManager {
         }
       }
       // Near-miss bonus
-      if (!h.passed && dd < -h.halfL - p.halfLength) {
+      if (h.kind !== 'cone' && !h.passed && dd < -h.halfL - p.halfLength) {
         h.passed = true;
         if (Math.abs(dl) < h.halfW + p.halfWidth + NEAR_MISS_PAD && this.nearMissCd <= 0 && !p.dead) {
           this.nearMissCd = 0.6;

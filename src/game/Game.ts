@@ -5,7 +5,7 @@ import type { AssetRegistry } from '../assets/AssetRegistry';
 import { buildSkyline } from '../assets/procedural/environment';
 import type { InputManager, FrameInput } from '../input/Input';
 import type { PeerHost } from '../input/PeerHost';
-import { HEAT_LEVELS, NEAR_MISS_BONUS, POWERUPS, type HeatDef, type PowerupId } from '../data/config';
+import { HEAT_LEVELS, NEAR_MISS_BONUS, NITRO_MAX_CHARGES, POWERUPS, type HeatDef, type PowerupId } from '../data/config';
 import { damp, rand } from '../core/math';
 import { audio } from '../core/Audio';
 import { Track, type TrackPoint } from './Track';
@@ -37,7 +37,7 @@ export interface RunResult {
 
 type State = 'idle' | 'playing' | 'paused' | 'wrecking';
 
-const NEUTRAL: FrameInput = { steer: 0, drift: false, shoot: false, gadget: false, reverse: false, recenter: false, gadgetPressed: false, source: 'keyboard' };
+const NEUTRAL: FrameInput = { steer: 0, drift: false, shoot: false, gadget: false, reverse: false, recenter: false, gadgetPressed: false, nitroPressed: false, autoFire: false, source: 'keyboard' };
 const WRECK_REAL_SECONDS = 2.0;
 const WRECK_TIME_SCALE = 0.2;
 
@@ -165,12 +165,50 @@ export class Game implements GameCtx {
         this.fx.sparkBurst(this.player.renderPos.clone().add(new THREE.Vector3(rand(-1, 1), rand(0, 1.5), rand(-1.5, 1.5))), new THREE.Vector3(0, 1, 0), 1, 0x3ddc6b, 5, 0.4, 0.5, 0.6);
       }
     } else if (id === 'powerup_nitro') {
-      this.player.nitro = def.duration;
-      audio.boost(2);
+      // Nitro is banked as a charge and fired on demand (W / ↑ / NITRO button).
+      if (this.player.nitroCharges < NITRO_MAX_CHARGES) {
+        this.player.nitroCharges++;
+        this.hud.showBanner(`+1 NITRO <span>${'●'.repeat(this.player.nitroCharges)}</span>`, 'nitro', 1.5);
+      } else {
+        this.player.nitro = def.duration;
+        this.hud.showBanner('NITRO FULL · AUTO-BOOST!', 'nitro', 1.5);
+        audio.boost(2);
+      }
+      return;
     } else if (id === 'powerup_magnet') {
       this.player.magnet = def.duration;
     }
     this.hud.showBanner(def.name, id.replace('powerup_', ''), 1.5);
+  }
+
+  /** Weapon reload, gadget cooldown and nitro charges → HUD chips and touch buttons. */
+  private updateLoadoutHud(): void {
+    const c = this.combat;
+    const p = this.player;
+    const w = c.weapon;
+    const wFill = 1 - Math.max(0, c.fireCd) / w.interval;
+    const wReady = c.fireCd <= 0;
+    const wText = w.kind === 'hitscan' ? (c.target ? 'LOCKED' : 'READY') : wReady ? (c.target ? 'LOCKED' : 'READY') : `RELOAD ${c.fireCd.toFixed(1)}s`;
+    this.hud.setChip('weapon', w.name.replace(/^Twin /, '').toUpperCase(), w.kind === 'hitscan' ? 1 : wFill, wText, w.kind === 'hitscan' || wReady);
+    const gFill = 1 - c.gadgetCd / c.gadget.cooldown;
+    const gText = c.gadgetReady ? 'READY' : `${c.gadgetCd.toFixed(1)}s`;
+    this.hud.setChip('gadget', c.gadget.name.toUpperCase(), gFill, gText, c.gadgetReady);
+    const pips = '●'.repeat(p.nitroCharges) + '○'.repeat(Math.max(0, NITRO_MAX_CHARGES - p.nitroCharges));
+    const nActive = p.nitro > 0;
+    const nFill = nActive ? p.nitro / POWERUPS.powerup_nitro.duration : p.nitroCharges > 0 ? 1 : 0;
+    this.hud.setChip('nitro', 'NITRO', nFill, nActive ? 'BOOSTING' : pips, nActive || p.nitroCharges > 0);
+    this.input.setButtonState('gadget', gFill, gText, c.gadgetReady);
+    this.input.setButtonState('nitro', nFill, nActive ? 'BOOST' : pips, nActive || p.nitroCharges > 0);
+  }
+
+  private fireNitro(): void {
+    const p = this.player;
+    if (p.dead || p.nitro > 0 || p.nitroCharges <= 0) return;
+    p.nitroCharges--;
+    p.nitro = POWERUPS.powerup_nitro.duration;
+    audio.boost(2);
+    this.rig.shake(0.3);
+    this.hud.showBanner('NITRO!', 'nitro', 1.2);
   }
 
   nearMiss(): void {
@@ -297,6 +335,7 @@ export class Game implements GameCtx {
     const wrecking = this.state === 'wrecking';
     const sdt = dt * (wrecking ? WRECK_TIME_SCALE : 1);
     const carInput = this.player.dead ? NEUTRAL : input;
+    if (input.nitroPressed && this.state === 'playing') this.fireNitro();
 
     // Fixed-step physics with interpolation
     this.acc += sdt;
@@ -351,9 +390,8 @@ export class Game implements GameCtx {
       time: this.director.time,
       boss,
       boostTier: this.player.drift.active ? this.player.drift.tier : 0,
-      gadgetText: this.combat.gadgetReady ? `${this.combat.gadget.name.toUpperCase()} · READY` : `${this.combat.gadget.name.toUpperCase()} · ${this.combat.gadgetCd.toFixed(1)}s`,
     });
-    this.input.setGadgetCooldown(this.combat.gadgetCd, this.combat.gadgetReady);
+    this.updateLoadoutHud();
     audio.setEngine(Math.min(1.4, this.player.speed / 30), this.player.boosting);
 
     if (wrecking) {

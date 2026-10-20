@@ -6,6 +6,8 @@ import type { AssetRegistry } from '../assets/AssetRegistry';
 import { chance, pick } from '../core/math';
 
 const tmpLocal = { x: 0, z: 0, h: 0 };
+/** Max deviation of the road heading from the run's start direction (allows 90° corners). */
+const MAX_HEADING = Math.PI / 2;
 
 export interface TrackPoint {
   dist: number;
@@ -76,6 +78,8 @@ export class Track {
   biome: Biome = 'city';
   onChunkPlaced: ((c: Chunk, safe: boolean) => void) | null = null;
   private placedCount = 0;
+  private lastKind: ChunkKind = 'straight';
+  private curveRun = 0;
   private tmpProj = { s: 0, lat: 0 };
 
   constructor(private physics: PhysicsWorld, assets: AssetRegistry) {
@@ -119,6 +123,8 @@ export class Track {
     for (const c of this.chunks) this.clearColliders(c);
     this.chunks = [];
     this.placedCount = 0;
+    this.lastKind = 'straight';
+    this.curveRun = 0;
     this.biome = 'city';
     let p0 = new THREE.Vector3(0, 0, ROAD.chunkLength * ROAD.chunksBehind);
     let h0 = 0;
@@ -136,16 +142,34 @@ export class Track {
   }
 
   private chooseKind(h: number): ChunkKind {
-    if (this.biome === 'coastal') return 'highway';
+    if (this.biome === 'coastal') {
+      this.lastKind = 'highway';
+      return 'highway';
+    }
+    // Heading stays within ±90° of the start direction: back-to-back curves make 90° corners,
+    // opposite curves make S-bends. Straights get rarer so the run reads like a street circuit.
     const eps = 0.01;
-    const canL = h + CURVE_TURN <= CURVE_TURN + eps;
-    const canR = h - CURVE_TURN >= -CURVE_TURN - eps;
-    if (Math.abs(h) > eps && chance(0.45)) return h > 0 ? 'curveR' : 'curveL';
-    if (chance(0.55)) return 'straight';
-    const opts: ChunkKind[] = [];
-    if (canL) opts.push('curveL');
-    if (canR) opts.push('curveR');
-    return opts.length ? pick(opts) : 'straight';
+    const limit = MAX_HEADING + eps;
+    const canL = h + CURVE_TURN <= limit;
+    const canR = h - CURVE_TURN >= -limit;
+    const last = this.lastKind;
+    let kind: ChunkKind;
+    if (this.curveRun >= 3 || ((last === 'curveL' || last === 'curveR') && chance(0.35))) kind = 'straight';
+    else if (last === 'curveL' && canL && chance(0.4)) kind = 'curveL';
+    else if (last === 'curveR' && canR && chance(0.4)) kind = 'curveR';
+    else if (last === 'curveL' && canR && chance(0.45)) kind = 'curveR';
+    else if (last === 'curveR' && canL && chance(0.45)) kind = 'curveL';
+    else if (Math.abs(h) > MAX_HEADING - eps && chance(0.6)) kind = h > 0 ? 'curveR' : 'curveL';
+    else if (chance(0.42)) kind = 'straight';
+    else {
+      const opts: ChunkKind[] = [];
+      if (canL) opts.push('curveL');
+      if (canR) opts.push('curveR');
+      kind = opts.length ? pick(opts) : 'straight';
+    }
+    this.lastKind = kind;
+    this.curveRun = kind === 'straight' ? 0 : this.curveRun + 1;
+    return kind;
   }
 
   private place(c: Chunk, kind: ChunkKind, p0: THREE.Vector3, h0: number, startDist: number, safe: boolean): void {

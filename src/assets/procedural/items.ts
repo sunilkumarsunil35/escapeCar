@@ -188,6 +188,20 @@ export function buildBarrel(): THREE.Group {
   return root;
 }
 
+/** Orange traffic cone with reflective white bands (construction chicanes). */
+export function buildCone(): THREE.Group {
+  const b = new GeoBuilder();
+  b.box(0.62, 0.06, 0.62, C.black, [0, 0.03, 0]);
+  b.cyl(0.05, 0.26, 0.85, 8, C.orange, [0, 0.48, 0]);
+  b.cyl(0.13, 0.17, 0.12, 8, C.stripeWhite, [0, 0.52, 0]);
+  b.cyl(0.08, 0.1, 0.09, 8, C.stripeWhite, [0, 0.74, 0]);
+  const g = b.build({ castShadow: true, receiveShadow: false });
+  g.name = 'body';
+  const root = new THREE.Group();
+  root.add(g);
+  return root;
+}
+
 export const RAMP_SIZE = { width: 4, length: 6, height: 1.6 };
 
 /** Yellow-and-black striped wooden construction jump ramp; rises toward -Z. */
