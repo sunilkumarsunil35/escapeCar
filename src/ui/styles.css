@@ -71,27 +71,35 @@ button { font-family: inherit; cursor: pointer; }
 /* ---------- Touch controls (mobile direct play) ---------- */
 .touch-layer { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
 .touch-layer .tz { pointer-events: auto; touch-action: none; position: absolute; display: flex; align-items: center; justify-content: center; font-weight: 900; letter-spacing: 0.06em; color: rgba(255, 255, 255, 0.85); text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6); transition: background 0.08s, transform 0.08s; -webkit-user-select: none; user-select: none; }
-/* Left thumb: one wide slide-to-steer pad covering the lower-left of the screen. */
-.tz-pad { left: 0; bottom: 0; width: 48%; height: 62%; padding: 0 calc(16px + var(--safe-l)) calc(18px + var(--safe-b)); align-items: flex-end !important; }
-.tz-pad-track { width: 100%; height: 76px; border-radius: 40px; background: rgba(0, 0, 0, 0.28); border: 3px solid rgba(255, 255, 255, 0.35); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; font-size: 12px; color: rgba(255, 255, 255, 0.6); }
-.tz-pad-track span:first-child, .tz-pad-track span:last-child { font-size: 26px; color: rgba(255, 255, 255, 0.8); }
-.tz-knob { position: absolute; left: 50%; bottom: calc(22px + var(--safe-b)); width: 68px; height: 68px; margin-left: -34px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fde68a, #f59e0b); border: 3px solid #fff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); opacity: 0.55; transition: left 0.05s linear, opacity 0.1s; pointer-events: none; }
-.tz-pad.active .tz-knob { opacity: 1; }
-.tz-pad.active .tz-pad-track { border-color: var(--amber); }
+/* Left thumb: floating low-opacity joystick; it centres where the thumb lands. */
+.tz-stick { left: 0; top: 22%; bottom: 0; width: 50%; }
+.tz-stick-base { position: absolute; left: calc(110px + var(--safe-l)); top: calc(100% - 110px - var(--safe-b)); width: 132px; height: 132px; margin: -66px 0 0 -66px; border-radius: 50%; background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.28); opacity: 0.5; transition: opacity 0.12s; pointer-events: none; }
+.tz-stick.active .tz-stick-base { opacity: 1; transition: none; }
+.tz-stick-knob { position: absolute; left: 50%; top: 50%; width: 60px; height: 60px; border-radius: 50%; background: rgba(255, 255, 255, 0.35); border: 2px solid rgba(255, 255, 255, 0.6); transform: translate(-50%, -50%); }
+.tz-stick-base i { position: absolute; left: 50%; transform: translateX(-50%); font-style: normal; font-size: 9px; letter-spacing: 0.12em; color: rgba(255, 255, 255, 0.55); }
+.tz-stick-base i.up { top: -16px; }
+.tz-stick-base i.down { bottom: -16px; }
+.tz-stick.up .tz-stick-knob { background: rgba(56, 189, 248, 0.6); }
+.tz-stick.up i.up { color: #7dd3fc; }
+.tz-stick.down .tz-stick-knob { background: rgba(251, 191, 36, 0.55); }
+.tz-stick.down i.down { color: #fde68a; }
 .tz-gyro-drift { display: none !important; left: 0; top: 16%; width: 48%; bottom: 0; }
 .tz-gyro-drift span { position: absolute; left: calc(18px + var(--safe-l)); bottom: calc(24px + var(--safe-b)); padding: 10px 14px; border-radius: 14px; border: 2px dashed rgba(255, 255, 255, 0.35); background: rgba(0, 0, 0, 0.2); font-size: 13px; }
 .tz-gyro-drift.active span { background: rgba(34, 211, 238, 0.35); border-color: var(--cyan); }
-.gyro-mode .tz-pad { display: none !important; }
+.gyro-mode .tz-stick { display: none !important; }
 .gyro-mode .tz-gyro-drift { display: flex !important; }
 .gyro-mode .tz-drift { display: none !important; }
-.tz-rev { left: calc(16px + var(--safe-l)); top: calc(104px + var(--safe-t)); width: 64px; height: 44px; border-radius: 12px; background: rgba(0, 0, 0, 0.35); border: 2px solid rgba(255, 255, 255, 0.35); font-size: 13px; }
-.tz-rev.active { background: rgba(255, 255, 255, 0.35); }
+.gyro-mode .tz-nitro { right: calc(160px + var(--safe-r)); bottom: calc(26px + var(--safe-b)); }
 /* Right thumb: big DRIFT, NITRO and GADGET with radial cooldown fills. */
-.tz-drift { right: calc(18px + var(--safe-r)); bottom: calc(18px + var(--safe-b)); width: 128px; height: 128px; border-radius: 50%; background: radial-gradient(circle, rgba(34, 211, 238, 0.55), rgba(8, 51, 68, 0.75)); border: 4px solid rgba(255, 255, 255, 0.6); font-size: 18px; }
+.tz-fire { right: calc(18px + var(--safe-r)); bottom: calc(18px + var(--safe-b)); width: 128px; height: 128px; border-radius: 50%; background: radial-gradient(circle, rgba(239, 68, 68, 0.8), rgba(127, 29, 29, 0.75)); border: 4px solid rgba(255, 255, 255, 0.6); font-size: 20px; }
+.tz-fire.active { transform: scale(0.92); background: radial-gradient(circle, #fde047, #ef4444); }
+.tz-drift { right: calc(160px + var(--safe-r)); bottom: calc(22px + var(--safe-b)); width: 104px; height: 104px; border-radius: 50%; background: radial-gradient(circle, rgba(34, 211, 238, 0.55), rgba(8, 51, 68, 0.75)); border: 4px solid rgba(255, 255, 255, 0.6); font-size: 16px; }
 .tz-drift.active { transform: scale(0.92); background: radial-gradient(circle, #a5f3fc, #0891b2); }
+.tz-nitro { display: none !important; }
+.gyro-mode .tz-nitro { display: flex !important; }
 .tz-nitro, .tz-gadget { width: 92px; height: 92px; border-radius: 50%; flex-direction: column; overflow: hidden; border: 3px solid rgba(255, 255, 255, 0.55); background: rgba(15, 23, 42, 0.55); font-size: 12px; }
-.tz-nitro { right: calc(160px + var(--safe-r)); bottom: calc(26px + var(--safe-b)); }
-.tz-gadget { right: calc(36px + var(--safe-r)); bottom: calc(166px + var(--safe-b)); }
+.tz-nitro { right: calc(166px + var(--safe-r)); bottom: calc(140px + var(--safe-b)); }
+.tz-gadget { right: calc(36px + var(--safe-r)); bottom: calc(160px + var(--safe-b)); }
 .tz-fill { position: absolute; inset: 0; border-radius: 50%; opacity: 0.6; background: conic-gradient(var(--fillc) calc(var(--p, 1) * 360deg), transparent 0); }
 .tz-nitro .tz-fill { --fillc: #38bdf8; }
 .tz-gadget .tz-fill { --fillc: #f59e0b; }
@@ -99,14 +107,13 @@ button { font-family: inherit; cursor: pointer; }
 .tz-sub { font-size: 12px; color: #fff; margin-top: 2px; letter-spacing: 0.04em; }
 .tz-nitro.cooling, .tz-gadget.cooling { border-color: rgba(255, 255, 255, 0.2); }
 .tz-nitro.active, .tz-gadget.active { transform: scale(0.9); }
-.tz-auto { position: absolute; right: calc(20px + var(--safe-r)); bottom: calc(152px + var(--safe-b)); font-size: 9px; font-weight: 800; letter-spacing: 0.1em; color: rgba(255, 255, 255, 0.55); display: none; }
 @media (max-height: 420px) {
-  .tz-drift { width: 104px; height: 104px; }
-  .tz-nitro, .tz-gadget { width: 76px; height: 76px; }
-  .tz-nitro { right: calc(132px + var(--safe-r)); }
-  .tz-gadget { bottom: calc(134px + var(--safe-b)); right: calc(28px + var(--safe-r)); }
-  .tz-pad-track { height: 64px; }
-  .tz-knob { width: 56px; height: 56px; margin-left: -28px; }
+  .tz-fire { width: 104px; height: 104px; }
+  .tz-drift { width: 84px; height: 84px; right: calc(132px + var(--safe-r)); }
+  .tz-nitro, .tz-gadget { width: 70px; height: 70px; }
+  .tz-nitro { right: calc(140px + var(--safe-r)); bottom: calc(114px + var(--safe-b)); }
+  .tz-gadget { bottom: calc(132px + var(--safe-b)); right: calc(28px + var(--safe-r)); }
+  .gyro-mode .tz-nitro { right: calc(132px + var(--safe-r)); bottom: calc(22px + var(--safe-b)); }
 }
 
 /* ---------- HUD ---------- */
@@ -179,7 +186,7 @@ button { font-family: inherit; cursor: pointer; }
 @keyframes chipFlash { 0% { transform: scale(1.12); background: rgba(134, 239, 172, 0.55); } 100% { transform: scale(1); } }
 @media (pointer: coarse) {
   .hud-loadout { left: calc(12px + var(--safe-l)); top: calc(50px + var(--safe-t)); bottom: auto; transform: scale(0.8); transform-origin: left top; }
-  .hud-chip.gadget, .hud-chip.nitro { display: none; }
+  .hud-chip.gadget { display: none; }
   .hud-chip-key { display: none; }
   .hud-chip { padding-left: 10px; }
 }

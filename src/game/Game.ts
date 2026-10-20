@@ -37,7 +37,7 @@ export interface RunResult {
 
 type State = 'idle' | 'playing' | 'paused' | 'wrecking';
 
-const NEUTRAL: FrameInput = { steer: 0, drift: false, shoot: false, gadget: false, reverse: false, recenter: false, gadgetPressed: false, nitroPressed: false, autoFire: false, source: 'keyboard' };
+const NEUTRAL: FrameInput = { steer: 0, drift: false, shoot: false, gadget: false, reverse: false, recenter: false, gadgetPressed: false, nitroPressed: false, brake: false, source: 'keyboard' };
 const WRECK_REAL_SECONDS = 2.0;
 const WRECK_TIME_SCALE = 0.2;
 

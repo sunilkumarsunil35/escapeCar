@@ -17,8 +17,8 @@ export interface ControllerPayload {
 export interface FrameInput extends ControllerPayload {
   gadgetPressed: boolean;
   nitroPressed: boolean;
-  /** Touch play fires automatically whenever the turret has a lock (one less button for thumbs). */
-  autoFire: boolean;
+  /** Joystick pulled back: slow down (and creep into reverse once stopped). */
+  brake: boolean;
   source: 'keyboard' | 'touch' | 'gyro' | 'remote';
 }
 
@@ -28,7 +28,7 @@ export interface RemoteSource {
 }
 
 type TouchMode = 'gyro' | 'buttons';
-type TouchKey = 'drift' | 'gadget' | 'nitro' | 'reverse';
+type TouchKey = 'drift' | 'fire' | 'gadget' | 'nitro' | 'reverse';
 
 /** Merges keyboard, mouse, touch zones, gyroscope and the paired-phone stream into one FrameInput. */
 export class InputManager {
@@ -38,14 +38,14 @@ export class InputManager {
   private keys = new Set<string>();
   private kbSteer = 0;
   private mouseFire = false;
-  private touch: Record<TouchKey, boolean> = { drift: false, gadget: false, nitro: false, reverse: false };
-  private padSteer = 0;
-  private padActive = false;
+  private touch: Record<TouchKey, boolean> = { drift: false, fire: false, gadget: false, nitro: false, reverse: false };
+  private stick = { active: false, x: 0, y: 0 };
   private lastGadget = false;
   private lastNitro = false;
   private layer: HTMLDivElement;
-  private pad: HTMLDivElement;
-  private knob: HTMLDivElement;
+  private stickZone: HTMLDivElement;
+  private stickBase: HTMLDivElement;
+  private stickKnob: HTMLDivElement;
   private buttons: Record<'gadget' | 'nitro', HTMLDivElement>;
   enabled = false;
 
@@ -67,73 +67,98 @@ export class InputManager {
       if (e.button === 0) this.mouseFire = false;
     });
 
-    // Touch layout: left thumb = one big slide-to-steer pad (drift zone in gyro mode),
-    // right thumb = DRIFT + NITRO + GADGET. The roof gun auto-fires on lock.
+    // Touch layout: left thumb = floating virtual joystick (left/right steer, up = nitro,
+    // down = slow down); in gyro mode the left half is the drift zone instead.
+    // Right thumb = FIRE (hold, targeting is automatic) + DRIFT + GADGET (+ NITRO in gyro mode).
     this.layer = document.createElement('div');
     this.layer.className = 'touch-layer hidden';
     this.layer.innerHTML = `
-      <div class="tz tz-pad"><div class="tz-pad-track"><span>◀</span><span>SLIDE TO STEER</span><span>▶</span></div><div class="tz-knob"></div></div>
+      <div class="tz tz-stick"><div class="tz-stick-base"><i class="up">NITRO</i><i class="down">SLOW</i><div class="tz-stick-knob"></div></div></div>
       <div class="tz tz-gyro-drift"><span>HOLD · DRIFT / BRAKE</span></div>
-      <div class="tz tz-rev">REV</div>
+      <div class="tz tz-fire"><span>FIRE</span></div>
       <div class="tz tz-drift"><span>DRIFT</span></div>
       <div class="tz tz-nitro"><div class="tz-fill"></div><span>NITRO</span><b class="tz-sub"></b></div>
       <div class="tz tz-gadget"><div class="tz-fill"></div><span>GADGET</span><b class="tz-sub"></b></div>
-      <div class="tz-auto">AUTO-FIRE ON LOCK</div>`;
+`;
     uiRoot.appendChild(this.layer);
-    this.pad = this.layer.querySelector('.tz-pad') as HTMLDivElement;
-    this.knob = this.layer.querySelector('.tz-knob') as HTMLDivElement;
+    this.stickZone = this.layer.querySelector('.tz-stick') as HTMLDivElement;
+    this.stickBase = this.layer.querySelector('.tz-stick-base') as HTMLDivElement;
+    this.stickKnob = this.layer.querySelector('.tz-stick-knob') as HTMLDivElement;
     this.buttons = {
       gadget: this.layer.querySelector('.tz-gadget') as HTMLDivElement,
       nitro: this.layer.querySelector('.tz-nitro') as HTMLDivElement,
     };
-    this.bindPad();
+    this.bindStick();
+    this.bindZone(this.layer.querySelector('.tz-fire') as HTMLElement, 'fire');
     this.bindZone(this.layer.querySelector('.tz-drift') as HTMLElement, 'drift');
     this.bindZone(this.layer.querySelector('.tz-gyro-drift') as HTMLElement, 'drift');
-    this.bindZone(this.layer.querySelector('.tz-rev') as HTMLElement, 'reverse');
     this.bindZone(this.buttons.gadget, 'gadget');
     this.bindZone(this.buttons.nitro, 'nitro');
     this.layer.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
-  /** Analog steering from the finger's x within the pad; sliding across it never "misses" a button. */
-  private bindPad(): void {
-    const pointers = new Map<number, number>();
-    const update = (): void => {
-      this.padActive = pointers.size > 0;
-      if (!this.padActive) {
-        this.padSteer = 0;
-      } else {
-        const r = this.pad.getBoundingClientRect();
-        const x = [...pointers.values()].pop() as number;
-        const v = Math.max(-1, Math.min(1, (x - (r.left + r.width / 2)) / (r.width * 0.3)));
-        const dz = 0.1;
-        this.padSteer = Math.abs(v) < dz ? 0 : (v - Math.sign(v) * dz) / (1 - dz);
-      }
-      this.pad.classList.toggle('active', this.padActive);
-      this.knob.style.left = `${50 + this.padSteer * 32}%`;
+  /**
+   * Floating joystick: it centres wherever the left thumb lands, so there is no small target to
+   * miss. X steers (analog), pushing up fires nitro, pulling back slows down.
+   */
+  private bindStick(): void {
+    const RADIUS = 56;
+    let id: number | null = null;
+    let cx = 0;
+    let cy = 0;
+    const rest = (): void => {
+      this.stick.active = false;
+      this.stick.x = 0;
+      this.stick.y = 0;
+      this.stickBase.style.left = '';
+      this.stickBase.style.top = '';
+      this.stickKnob.style.transform = 'translate(-50%, -50%)';
+      this.stickZone.classList.remove('active', 'up', 'down');
     };
-    this.pad.addEventListener('pointerdown', (e) => {
+    const move = (x: number, y: number): void => {
+      let dx = x - cx;
+      let dy = y - cy;
+      const len = Math.hypot(dx, dy);
+      if (len > RADIUS) {
+        dx = (dx / len) * RADIUS;
+        dy = (dy / len) * RADIUS;
+      }
+      this.stick.x = dx / RADIUS;
+      this.stick.y = dy / RADIUS;
+      this.stickKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+      this.stickZone.classList.toggle('up', this.stick.y < -0.6);
+      this.stickZone.classList.toggle('down', this.stick.y > 0.55);
+    };
+    this.stickZone.addEventListener('pointerdown', (e) => {
       e.preventDefault();
-      pointers.set(e.pointerId, e.clientX);
+      if (id !== null) return;
+      id = e.pointerId;
+      const r = this.stickZone.getBoundingClientRect();
+      cx = Math.max(r.left + RADIUS + 8, Math.min(r.right - RADIUS - 8, e.clientX));
+      cy = Math.max(r.top + RADIUS + 8, Math.min(r.bottom - RADIUS - 8, e.clientY));
+      this.stickBase.style.left = `${cx - r.left}px`;
+      this.stickBase.style.top = `${cy - r.top}px`;
+      this.stick.active = true;
+      this.stickZone.classList.add('active');
       try {
-        this.pad.setPointerCapture(e.pointerId);
+        this.stickZone.setPointerCapture(e.pointerId);
       } catch {
         /* capture unsupported for this pointer type */
       }
-      update();
+      move(e.clientX, e.clientY);
     });
-    this.pad.addEventListener('pointermove', (e) => {
-      if (!pointers.has(e.pointerId)) return;
-      pointers.set(e.pointerId, e.clientX);
-      update();
+    this.stickZone.addEventListener('pointermove', (e) => {
+      if (e.pointerId === id) move(e.clientX, e.clientY);
     });
     const up = (e: PointerEvent): void => {
-      pointers.delete(e.pointerId);
-      update();
+      if (e.pointerId !== id) return;
+      id = null;
+      rest();
     };
-    this.pad.addEventListener('pointerup', up);
-    this.pad.addEventListener('pointercancel', up);
-    this.pad.addEventListener('lostpointercapture', up);
+    this.stickZone.addEventListener('pointerup', up);
+    this.stickZone.addEventListener('pointercancel', up);
+    this.stickZone.addEventListener('lostpointercapture', up);
+    rest();
   }
 
   private bindZone(el: HTMLElement, key: TouchKey): void {
@@ -190,7 +215,7 @@ export class InputManager {
     const remote = this.remote?.connected ? this.remote.latest() : null;
     let out: FrameInput;
     if (remote) {
-      out = { ...remote, nitro: Boolean(remote.nitro), gadgetPressed: false, nitroPressed: false, autoFire: false, source: 'remote' };
+      out = { ...remote, nitro: Boolean(remote.nitro), gadgetPressed: false, nitroPressed: false, brake: false, source: 'remote' };
     } else {
       const k = this.keys;
       const left = k.has('KeyA') || k.has('ArrowLeft');
@@ -211,22 +236,24 @@ export class InputManager {
         if (this.touchMode === 'gyro' && this.gyro.active) {
           steer = this.gyro.steer;
           source = 'gyro';
-        } else if (this.padActive) {
-          steer = this.padSteer;
+        } else if (this.stick.active) {
+          const dz = 0.14;
+          const x = this.stick.x;
+          steer = Math.abs(x) < dz ? 0 : (x - Math.sign(x) * dz) / (1 - dz);
           source = 'touch';
         }
       }
       out = {
         steer,
         drift: kbDrift || this.touch.drift,
-        shoot: kbFire,
+        shoot: kbFire || this.touch.fire,
         gadget: kbGadget || this.touch.gadget,
-        nitro: kbNitro || this.touch.nitro,
+        nitro: kbNitro || this.touch.nitro || (this.stick.active && this.stick.y < -0.6),
         reverse: kbReverse || this.touch.reverse,
         recenter: false,
         gadgetPressed: false,
         nitroPressed: false,
-        autoFire: touching,
+        brake: this.stick.active && this.stick.y > 0.55,
         source,
       };
     }

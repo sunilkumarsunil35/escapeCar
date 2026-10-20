@@ -53,7 +53,7 @@ export class Hud {
       <div class="hud-arrow right">❯❯</div>
       <div class="hud-arrow bottom">︾</div>
       <div class="hud-vignette"></div>
-      <div class="hud-hint">${IS_TOUCH ? 'SLIDE LEFT PAD TO STEER · DRIFT / NITRO / GADGET ON THE RIGHT · GUN AUTO-FIRES' : 'A/D STEER · SPACE DRIFT · J/CLICK FIRE · E GADGET · W NITRO · S REVERSE · ESC PAUSE'}</div>`;
+      <div class="hud-hint">${IS_TOUCH ? 'LEFT STICK: STEER · UP = NITRO · DOWN = SLOW  ·  HOLD FIRE TO SHOOT · DRIFT · GADGET' : 'A/D STEER · SPACE DRIFT · J/CLICK FIRE · E GADGET · W NITRO · S REVERSE · ESC PAUSE'}</div>`;
     root.appendChild(this.el);
     const q = <T extends HTMLElement>(s: string): T => this.el.querySelector(s) as T;
     this.hpFill = q('.hud-hp-fill');

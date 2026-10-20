@@ -193,8 +193,7 @@ export class Combat {
     ctx.fx.setReticle(this.target ? this.targetPos(this.target, this.aim) : null, ctx.camera, this.target?.kind === 'enemy' && this.target.enemy.isChopper ? 2.2 : 1.0);
 
     // --- Firing ---
-    const wantFire = input.shoot || (input.autoFire && this.target !== null && this.aligned);
-    if (wantFire && !p.dead && this.fireCd <= 0) {
+    if (input.shoot && !p.dead && this.fireCd <= 0) {
       this.fireCd = this.weapon.interval;
       if (this.weapon.kind === 'hitscan') this.fireHitscan(ctx);
       else this.fireMissile(ctx);

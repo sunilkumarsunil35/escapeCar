@@ -15,12 +15,12 @@ npm run build        # typecheck + production build to dist/
 
 | | Keyboard / mouse | Phone (direct play) | Phone as QR controller |
 |---|---|---|---|
-| Steer | A / D, ← / → | Slide the left STEER pad, or tilt ±30° (gyro) | Tilt |
+| Steer | A / D, ← / → | Left joystick (floats where your thumb lands), or tilt ±30° (gyro) | Tilt |
 | Hop + drift / brake | Space / Shift | DRIFT button (left half in gyro mode) | HOLD TO DRIFT |
-| Fire roof weapon (360° auto-aim) | J / F / click | Automatic when a target is locked | HOLD TO SHOOT |
+| Fire roof weapon (360° auto-aim) | J / F / click (hold) | Hold FIRE button | HOLD TO SHOOT |
 | Drop rear gadget | E / Q | GADGET button | GADGET |
-| Nitro (banked charges, max 3) | W / ↑ / N | NITRO button | NITRO |
-| Reverse | S / ↓ | REV button | Both zones held |
+| Nitro (banked charges, max 3) | W / ↑ / N | Push joystick up (NITRO button in gyro mode) | NITRO |
+| Slow down / reverse | S / ↓ | Pull joystick down (reverses once stopped) | Both zones held |
 | Pause | Esc / P | ❚❚ | — |
 
 Drift for 1.5 s to charge **Blue Turbo**, or 3.0 s for **Orange Turbo** (rams bikes). Release the drift button to fire the turbo. Landing a ramp jump also gives an Orange Turbo.

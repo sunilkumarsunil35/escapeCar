@@ -265,7 +265,8 @@ export class PlayerCar {
 
     // --- Inputs ---
     this.steer = input.steer;
-    this.reversing = input.reverse && this.speed < 14;
+    // Joystick pulled back slows down; held once nearly stopped it creeps into reverse.
+    this.reversing = (input.reverse || (input.brake && this.vF < 2.5)) && this.speed < 14;
     const driftHeld = input.drift && !this.reversing;
     if (driftHeld && !this.prevDrift && this.grounded && this.vF > 8) {
       vy = T.hopVelocity;
@@ -300,7 +301,7 @@ export class PlayerCar {
         this.onSparkTier?.(tier);
       }
     }
-    this.braking = driftHeld && !this.drift.active && !this.drift.pending && Math.abs(this.steer) < 0.2 && this.grounded;
+    this.braking = ((driftHeld && !this.drift.active && !this.drift.pending && Math.abs(this.steer) < 0.2) || (input.brake && !this.reversing)) && this.grounded;
     this.prevDrift = driftHeld;
 
     // --- Yaw ---

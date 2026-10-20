@@ -128,7 +128,7 @@ export class CalibratePrompt {
       <div class="c-card">
         <div class="c-phone">📱</div>
         <h2>Hold your phone like a steering wheel</h2>
-        <p>Auto-gas is on. Tilt to steer (±30°). Left thumb = hop & drift, right thumb = nitro / gadget. The roof gun fires automatically.</p>
+        <p>Auto-gas is on. Tilt to steer (±30°). Left thumb = hop & drift, right thumb = fire / nitro / gadget.</p>
         <button class="c-go">TAP TO CALIBRATE & START</button>
         <button class="c-buttons">Use on-screen steering instead</button>
         <button class="c-cancel">Back</button>
