@@ -1,0 +1,29 @@
+{
+  "name": "escape-car",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Escape Car — 3D low-poly arcade mafia getaway (Three.js + Rapier3D + PeerJS)",
+  "scripts": {
+    "dev": "vite --host",
+    "dev:https": "cross-env HTTPS=1 vite --host",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.14.0",
+    "peerjs": "^1.5.4",
+    "qrcode": "^1.5.4",
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/qrcode": "^1.5.5",
+    "@types/three": "^0.170.0",
+    "@vitejs/plugin-basic-ssl": "^1.2.0",
+    "cross-env": "^7.0.3",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  }
+}
