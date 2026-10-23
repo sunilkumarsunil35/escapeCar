@@ -141,7 +141,7 @@ export const HEAT_LEVELS: HeatDef[] = [
   { level: 1, start: 0, maxEnemies: 3, kinds: ['enemy_bike'], barrels: false, ramps: true, barricades: false, chopper: false, preset: 'preset_morning', biome: 'city' },
   { level: 2, start: 45, maxEnemies: 5, kinds: ['enemy_bike', 'enemy_sedan'], barrels: true, ramps: true, barricades: false, chopper: false, preset: 'preset_midday', biome: 'coastal' },
   { level: 3, start: 105, maxEnemies: 7, kinds: ['enemy_bike', 'enemy_sedan'], barrels: true, ramps: true, barricades: true, chopper: false, preset: 'preset_sunset', biome: 'city' },
-  { level: 4, start: 165, maxEnemies: 8, kinds: ['enemy_bike', 'enemy_sedan'], barrels: true, ramps: true, barricades: true, chopper: true, preset: 'preset_night', biome: 'city' },
+  { level: 4, start: 150, maxEnemies: 8, kinds: ['enemy_bike', 'enemy_sedan'], barrels: true, ramps: true, barricades: true, chopper: true, preset: 'preset_night', biome: 'city' },
 ];
 
 export interface PowerupDef {
