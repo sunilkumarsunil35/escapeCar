@@ -5,6 +5,7 @@ import { wheelParts, type AssetRegistry } from '../assets/AssetRegistry';
 import { audio } from '../core/Audio';
 import type { GameCtx } from './types';
 import type { TargetRing } from './Effects';
+import { sv } from '../core/scratch';
 
 const SEP = 0.6;
 
@@ -238,6 +239,7 @@ export class EnemyManager {
       e.dying = 1.6;
       audio.explosion(true);
       ctx.fx.explosion(e.worldPos, 1.4, 0x2b302d);
+      ctx.feedback('large');
       for (const s of this.strikes) {
         if (s.active) {
           s.active = false;
@@ -250,7 +252,7 @@ export class EnemyManager {
       audio.explosion(e.kind === 'enemy_sedan');
       this.tmp.copy(e.worldPos).y += 0.8;
       ctx.fx.explosion(this.tmp, e.kind === 'enemy_sedan' ? 1.2 : 0.8, e.kind === 'enemy_bike' ? 0x7a1f2b : 0x1b1c21);
-      ctx.shake(e.kind === 'enemy_sedan' ? 0.5 : 0.3);
+      ctx.feedback(e.kind === 'enemy_sedan' ? 'medium' : 'small', this.tmp);
     }
     ctx.onEnemyKilled(e);
   }
@@ -416,8 +418,8 @@ export class EnemyManager {
       const from = this.tmp;
       if (e.muzzle) e.muzzle.getWorldPosition(from);
       else from.copy(e.worldPos).add(this.tmp2.set(Math.cos(e.heading) * Math.sign(-dl || 1) * 1.0, 1.25, -Math.sin(e.heading) * Math.sign(-dl || 1) * 1.0));
-      const to = this.tmp2.copy(p.renderPos).add(new THREE.Vector3(rand(-0.8, 0.8), rand(0.2, 0.9), rand(-1.2, 1.2)));
-      const dir = to.clone().sub(from).normalize();
+      const to = this.tmp2.copy(p.renderPos).add(sv(rand(-0.8, 0.8), rand(0.2, 0.9), rand(-1.2, 1.2)));
+      const dir = sv().subVectors(to, from).normalize();
       ctx.fx.muzzleFlash(from, dir, e.kind === 'enemy_bike' ? 0.6 : 0.8);
       ctx.fx.tracer(from, to, 0xffa040, 0.05);
       if (Math.random() < 0.35) ctx.fx.sparkBurst(to, null, 2, 0xffd060, 5, 1, 0.3, 0.2);
@@ -438,7 +440,7 @@ export class EnemyManager {
       c.heading = ctx.track.sample(c.dist, c.lat, c.worldPos);
       c.worldPos.y = c.alt;
       c.obj.position.copy(c.worldPos);
-      if (Math.random() < 0.6) ctx.fx.flame(c.worldPos, new THREE.Vector3(rand(-2, 2), 3, rand(-2, 2)), 1.2, 0.5);
+      if (Math.random() < 0.6) ctx.fx.flame(c.worldPos, sv(rand(-2, 2), 3, rand(-2, 2)), 1.2, 0.5);
       if (c.dying <= 0 || c.alt <= 0.6) {
         ctx.fx.explosion(c.worldPos, 2.2, 0x2b302d);
         audio.explosion(true);
@@ -506,7 +508,7 @@ export class EnemyManager {
         s.missile.position.lerpVectors(start, s.pos, k);
         this.tmp.copy(s.pos).sub(start);
         if (this.tmp.lengthSq() > 0.01) s.missile.lookAt(this.tmp.add(s.missile.position));
-        ctx.fx.puff(s.missile.position, new THREE.Vector3(0, 1, 0), 0.4, 0.5);
+        ctx.fx.puff(s.missile.position, sv(0, 1, 0), 0.4, 0.5);
       }
       if (s.t >= STRIKE_WINDUP) {
         s.active = false;

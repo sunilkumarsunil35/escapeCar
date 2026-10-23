@@ -37,6 +37,7 @@ export class GarageUI {
   onLoadout: ((l: Loadout) => void) | null = null;
   onPreview: ((kind: PreviewKind, id: string | null, tier: number) => void) | null = null;
   onAdmin: (() => void) | null = null;
+  onSettings: (() => void) | null = null;
 
   constructor(root: HTMLElement, private save: SaveStore, private pairedLabel: () => string, showAdmin: boolean) {
     this.el = document.createElement('div');
@@ -48,6 +49,7 @@ export class GarageUI {
         <div class="g-stat"><label>BEST TIME</label><b class="g-best">00:00</b></div>
         <div class="g-top-spacer"></div>
         ${showAdmin ? '<button class="g-btn g-admin">⚙ ADMIN</button>' : ''}
+        <button class="g-btn g-settings" title="Settings">⚙</button>
         <button class="g-btn g-mute" title="Sound">🔊</button>
         <button class="g-btn g-pair">PAIR PHONE (QR)</button>
       </div>
@@ -84,6 +86,10 @@ export class GarageUI {
       this.onPair?.();
     });
     q('.g-buy').addEventListener('click', () => this.buyOrEquip());
+    q('.g-settings').addEventListener('click', () => {
+      audio.unlock();
+      this.onSettings?.();
+    });
     q('.g-mute').addEventListener('click', () => {
       audio.unlock();
       this.save.data.muted = !this.save.data.muted;

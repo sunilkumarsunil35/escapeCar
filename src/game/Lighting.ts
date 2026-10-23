@@ -102,6 +102,7 @@ export class Lighting {
   private t = 1;
   private duration = 4;
   presetId: PresetId = 'preset_morning';
+  private sunHorizon = new THREE.Vector3();
 
   constructor(private scene: THREE.Scene, private engine: Engine) {
     scene.add(this.ambient, this.hemi, this.sun, this.sun.target);
@@ -204,7 +205,7 @@ export class Lighting {
     this.sun.target.position.copy(focus);
     this.sky.position.copy(camera.position);
     this.stars.position.copy(camera.position);
-    const sunHorizon = new THREE.Vector3(this.cur.sunDir.x, Math.max(0.05, Math.min(this.cur.sunDir.y, 0.35)), this.cur.sunDir.z).normalize();
+    const sunHorizon = this.sunHorizon.set(this.cur.sunDir.x, Math.max(0.05, Math.min(this.cur.sunDir.y, 0.35)), this.cur.sunDir.z).normalize();
     this.sunDisc.position.copy(camera.position).addScaledVector(sunHorizon, 800);
     this.sunDisc.lookAt(camera.position);
   }

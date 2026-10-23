@@ -19,7 +19,7 @@ export interface FrameInput extends ControllerPayload {
   nitroPressed: boolean;
   /** Joystick pulled back: slow down (and creep into reverse once stopped). */
   brake: boolean;
-  source: 'keyboard' | 'touch' | 'gyro' | 'remote';
+  source: 'keyboard' | 'touch' | 'gyro' | 'remote' | 'gamepad';
 }
 
 export interface RemoteSource {
@@ -29,6 +29,20 @@ export interface RemoteSource {
 
 type TouchMode = 'gyro' | 'buttons';
 type TouchKey = 'drift' | 'fire' | 'gadget' | 'nitro' | 'reverse';
+type PadEdge = 'confirm' | 'back' | 'pause';
+
+interface PadState {
+  connected: boolean;
+  steer: number;
+  fire: boolean;
+  drift: boolean;
+  gadget: boolean;
+  nitro: boolean;
+  brake: boolean;
+  any: boolean;
+}
+
+const PAD_DEADZONE = 0.18;
 
 /** Merges keyboard, mouse, touch zones, gyroscope and the paired-phone stream into one FrameInput. */
 export class InputManager {
@@ -40,6 +54,9 @@ export class InputManager {
   private mouseFire = false;
   private touch: Record<TouchKey, boolean> = { drift: false, fire: false, gadget: false, nitro: false, reverse: false };
   private stick = { active: false, x: 0, y: 0 };
+  private pad: PadState = { connected: false, steer: 0, fire: false, drift: false, gadget: false, nitro: false, brake: false, any: false };
+  private padPrev: boolean[] = [];
+  private padEdges = new Set<PadEdge>();
   private lastGadget = false;
   private lastNitro = false;
   private layer: HTMLDivElement;
@@ -186,6 +203,60 @@ export class InputManager {
     el.addEventListener('lostpointercapture', up);
   }
 
+  /**
+   * Reads the first standard-mapped gamepad once per frame (call before poll()). Left stick uses a
+   * radial deadzone; buttons: RT/A fire · RB/B drift · X gadget · Y/LB nitro · LT slow · Start pause.
+   */
+  updatePad(): void {
+    this.padEdges.clear();
+    const pads = typeof navigator.getGamepads === 'function' ? navigator.getGamepads() : [];
+    let gp: Gamepad | null = null;
+    for (const g of pads) if (g && g.connected) {
+      gp = g;
+      break;
+    }
+    if (!gp) {
+      this.pad.connected = false;
+      this.pad.any = false;
+      return;
+    }
+    const b = (i: number, threshold = 0.4): boolean => {
+      const btn = gp?.buttons[i];
+      return !!btn && (btn.pressed || btn.value > threshold);
+    };
+    const x = gp.axes[0] ?? 0;
+    const y = gp.axes[1] ?? 0;
+    const mag = Math.hypot(x, y);
+    const scaled = mag < PAD_DEADZONE ? 0 : (mag - PAD_DEADZONE) / (1 - PAD_DEADZONE) / mag;
+    this.pad = {
+      connected: true,
+      steer: Math.max(-1, Math.min(1, x * scaled)),
+      fire: b(7, 0.25) || b(0),
+      drift: b(5) || b(1),
+      gadget: b(2),
+      nitro: b(3) || b(4),
+      brake: b(6, 0.35),
+      any: false,
+    };
+    this.pad.any = this.pad.steer !== 0 || this.pad.fire || this.pad.drift || this.pad.gadget || this.pad.nitro || this.pad.brake;
+    const edge = (i: number, name: PadEdge): void => {
+      const now = b(i);
+      if (now && !this.padPrev[i]) this.padEdges.add(name);
+      this.padPrev[i] = now;
+    };
+    edge(0, 'confirm');
+    edge(1, 'back');
+    edge(9, 'pause');
+  }
+
+  padPressed(e: PadEdge): boolean {
+    return this.padEdges.has(e);
+  }
+
+  get gamepadConnected(): boolean {
+    return this.pad.connected;
+  }
+
   get touchVisible(): boolean {
     return !this.layer.classList.contains('hidden');
   }
@@ -243,17 +314,22 @@ export class InputManager {
           source = 'touch';
         }
       }
+      const pad = this.pad;
+      if (Math.abs(steer) < 0.01 && pad.connected && pad.steer !== 0) {
+        steer = pad.steer;
+        source = 'gamepad';
+      } else if (source === 'keyboard' && pad.any) source = 'gamepad';
       out = {
         steer,
-        drift: kbDrift || this.touch.drift,
-        shoot: kbFire || this.touch.fire,
-        gadget: kbGadget || this.touch.gadget,
-        nitro: kbNitro || this.touch.nitro || (this.stick.active && this.stick.y < -0.6),
+        drift: kbDrift || this.touch.drift || pad.drift,
+        shoot: kbFire || this.touch.fire || pad.fire,
+        gadget: kbGadget || this.touch.gadget || pad.gadget,
+        nitro: kbNitro || this.touch.nitro || pad.nitro || (this.stick.active && this.stick.y < -0.6),
         reverse: kbReverse || this.touch.reverse,
         recenter: false,
         gadgetPressed: false,
         nitroPressed: false,
-        brake: this.stick.active && this.stick.y > 0.55,
+        brake: (this.stick.active && this.stick.y > 0.55) || pad.brake,
         source,
       };
     }

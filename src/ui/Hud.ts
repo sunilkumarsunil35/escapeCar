@@ -27,6 +27,8 @@ export class Hud {
   private last = { hp: -1, cash: -1, heat: -1, time: -1, boss: -2 };
   private bannerTimer = 0;
   onPause: (() => void) | null = null;
+  private pops: HTMLDivElement[] = [];
+  private popIdx = 0;
 
   constructor(root: HTMLElement) {
     this.el = document.createElement('div');
@@ -55,6 +57,8 @@ export class Hud {
       <div class="hud-arrow right">❯❯</div>
       <div class="hud-arrow bottom">︾</div>
       <div class="hud-vignette"></div>
+      <div class="hud-flash"></div>
+      <div class="hud-pops"></div>
       <div class="hud-hint">${IS_TOUCH ? 'LEFT STICK: STEER · UP = NITRO · DOWN = SLOW  ·  HOLD FIRE TO SHOOT · DRIFT · GADGET' : 'A/D STEER · SPACE DRIFT · J/CLICK FIRE · E GADGET · W NITRO · S REVERSE · ESC PAUSE'}</div>`;
     root.appendChild(this.el);
     const q = <T extends HTMLElement>(s: string): T => this.el.querySelector(s) as T;
@@ -218,6 +222,35 @@ export class Hud {
     this.toasts.appendChild(t);
     while (this.toasts.children.length > 4) this.toasts.firstChild?.remove();
     setTimeout(() => t.remove(), 1600);
+  }
+
+  /** Pooled floating number ("+$50") that pops with overshoot, rises and fades. */
+  pop(text: string, x: number, y: number, cls = ''): void {
+    if (!this.pops.length) {
+      const host = this.el.querySelector('.hud-pops') as HTMLElement;
+      for (let i = 0; i < 14; i++) {
+        const d = document.createElement('div');
+        d.className = 'hud-pop';
+        host.appendChild(d);
+        this.pops.push(d);
+      }
+    }
+    const d = this.pops[this.popIdx];
+    this.popIdx = (this.popIdx + 1) % this.pops.length;
+    d.textContent = text;
+    d.className = `hud-pop ${cls}`;
+    d.style.left = `${x + (Math.random() - 0.5) * 24}px`;
+    d.style.top = `${y}px`;
+    void d.offsetWidth;
+    d.classList.add('go');
+  }
+
+  whiteFlash(strength: number): void {
+    const f = this.el.querySelector('.hud-flash') as HTMLElement;
+    f.style.setProperty('--a', String(Math.min(0.7, strength)));
+    f.classList.remove('go');
+    void f.offsetWidth;
+    f.classList.add('go');
   }
 
   damageFlash(strength: number): void {

@@ -1,5 +1,6 @@
 import './ui/styles.css';
 import { App } from './App';
+import { audio } from './core/Audio';
 import { ControllerApp } from './input/ControllerApp';
 
 const params = new URLSearchParams(location.search);
@@ -14,7 +15,8 @@ if (room && /^[A-Z]{4}$/i.test(room)) {
   const app = new App();
   if (import.meta.env.DEV) {
     // Dev-only hook for automated playtests (step frames while the tab is backgrounded).
-    (window as unknown as { __escape: App }).__escape = app;
+    (window as unknown as { __escape: App; __audio: typeof audio }).__escape = app;
+    (window as unknown as { __audio: typeof audio }).__audio = audio;
   }
   app.boot().catch((err: unknown) => {
     console.error(err);

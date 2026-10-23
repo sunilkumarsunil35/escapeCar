@@ -61,7 +61,7 @@ export const C = {
   skylineDark: 0x8f8a80,
 };
 
-export type Layer = 'lit' | 'glow' | 'window' | 'night' | 'water';
+export type Layer = 'lit' | 'far' | 'glow' | 'window' | 'night' | 'water';
 
 /** Shared clock for the animated ocean (advanced by the game loop). */
 export const WATER_UNIFORMS = { uTime: { value: 0 } };
@@ -94,6 +94,8 @@ export const MATS = {
   glow: new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }),
   window: new THREE.MeshBasicMaterial({ vertexColors: true, color: 0x5b6f86 }),
   water: makeWaterMaterial(),
+  /** Same look as `lit` but its meshes skip the shadow pass (backdrop buildings). */
+  far: null as unknown as THREE.MeshStandardMaterial,
   night: new THREE.MeshBasicMaterial({
     vertexColors: true,
     transparent: true,
@@ -104,6 +106,8 @@ export const MATS = {
     side: THREE.DoubleSide,
   }),
 };
+
+MATS.far = MATS.lit;
 
 const flatCache = new Map<string, THREE.MeshStandardMaterial>();
 /** Cached standalone flat material for meshes that need their own material (e.g. hit-flash, glossy oil). */

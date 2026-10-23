@@ -376,7 +376,8 @@ function cityStreet(b: GeoBuilder, rng: Rng, turn: number, L: number): void {
       building(b, rng, w + 0.05, h, d);
       s += w;
     }
-    // Back row so gaps between roofs show more city, not void
+    // Back row so gaps between roofs show more city, not void (no shadow casting: far from the road)
+    b.defaultLayer = 'far';
     let bs = rr(rng, -2, 4);
     while (bs < L) {
       const w = rr(rng, 10, 16);
@@ -402,6 +403,7 @@ function cityStreet(b: GeoBuilder, rng: Rng, turn: number, L: number): void {
       }
     }
   }
+  b.defaultLayer = 'lit';
   // Street lights alternating sides
   for (const [s, side] of [[12, 1], [37, -1]] as const) {
     b.frame = frameAt(s, side * 11.5, turn, L, 0, 0.16);
@@ -469,6 +471,7 @@ function coastalHighway(b: GeoBuilder, rng: Rng, L: number, variant: number): vo
   strip(b, 0, L, -30, -26, 0.15, 0.4, C.sidewalk, 1);
   strip(b, 0, L, -60, -30, 0.05, 0.4, C.grass, 1);
   for (let i = 0; i < 4; i++) roundTree(b, rng, [-rr(rng, 31, 36), 0.05, -rr(rng, 2, L - 2)]);
+  b.defaultLayer = 'far';
   let s = 0;
   while (s < L) {
     const w = rr(rng, 10, 16);
@@ -478,6 +481,7 @@ function coastalHighway(b: GeoBuilder, rng: Rng, L: number, variant: number): vo
     building(b, rng, w, h, d);
     s += w + rr(rng, 1, 5);
   }
+  b.defaultLayer = 'lit';
   // Tall highway lamps on the median
   for (const ls of [5, 30]) {
     b.frame = frameAt(ls, -10.65, 0, L, 0, 0.9);

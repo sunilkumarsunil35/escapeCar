@@ -23,9 +23,11 @@ const tmpC = new THREE.Color();
  * chunk renders in 1–4 draw calls and shares the global palette materials.
  */
 export class GeoBuilder {
-  private parts: Record<Layer, THREE.BufferGeometry[]> = { lit: [], glow: [], window: [], night: [], water: [] };
+  private parts: Record<Layer, THREE.BufferGeometry[]> = { lit: [], far: [], glow: [], window: [], night: [], water: [] };
   /** Optional parent transform applied to every subsequent part (used to build along curves). */
   frame: THREE.Matrix4 | null = null;
+  /** Layer used when a part doesn't name one ('far' = no shadow casting). */
+  defaultLayer: Layer = 'lit';
 
   add(geo: THREE.BufferGeometry, color: number, pos: V3, opts: PartOpts = {}): this {
     const g = geo.index ? geo.toNonIndexed() : geo.clone();
@@ -52,7 +54,8 @@ export class GeoBuilder {
       colors[i * 3 + 2] = tmpC.b;
     }
     g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    this.parts[opts.layer ?? 'lit'].push(g);
+    const layer = opts.layer ?? this.defaultLayer;
+    this.parts[layer === 'lit' && this.defaultLayer === 'far' ? 'far' : layer].push(g);
     return this;
   }
 
@@ -128,7 +131,7 @@ export class GeoBuilder {
   build(opts: { castShadow?: boolean; receiveShadow?: boolean; name?: string } = {}): THREE.Group {
     const group = new THREE.Group();
     if (opts.name) group.name = opts.name;
-    (['lit', 'water', 'window', 'glow', 'night'] as Layer[]).forEach((layer) => {
+    (['lit', 'far', 'water', 'window', 'glow', 'night'] as Layer[]).forEach((layer) => {
       const geo = this.buildGeometry(layer);
       if (!geo) return;
       const mesh = new THREE.Mesh(geo, MATS[layer]);
@@ -137,6 +140,7 @@ export class GeoBuilder {
         mesh.castShadow = opts.castShadow ?? true;
         mesh.receiveShadow = opts.receiveShadow ?? true;
       }
+      if (layer === 'far') mesh.receiveShadow = opts.receiveShadow ?? true;
       if (layer === 'night') mesh.renderOrder = 5;
       if (layer === 'water') mesh.receiveShadow = true;
       group.add(mesh);

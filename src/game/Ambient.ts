@@ -61,6 +61,10 @@ const CIV_HALF_L = 2.1;
 export class Ambient {
   readonly root = new THREE.Group();
   private civs: Civ[] = [];
+  /** Read-only view of traffic for hazards (no per-frame generator allocations). */
+  get civList(): readonly { active: boolean; smashed: number; dist: number; lat: number }[] {
+    return this.civs;
+  }
   private peds: Ped[] = [];
   private birds: Bird[] = [];
   private flocks: { center: THREE.Vector3; dist: number; lat: number }[] = [];

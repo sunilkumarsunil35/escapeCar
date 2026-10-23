@@ -7,6 +7,15 @@ export interface LeaderEntry {
   date: number;
 }
 
+export type ShakeLevel = 'full' | 'reduced' | 'off';
+
+export interface Settings {
+  music: number;
+  sfx: number;
+  shake: ShakeLevel;
+  reduceFlashing: boolean;
+}
+
 export interface SaveData {
   version: 1;
   cash: number;
@@ -23,6 +32,7 @@ export interface SaveData {
   leaderboard: LeaderEntry[];
   totalRuns: number;
   muted: boolean;
+  settings: Settings;
 }
 
 const KEY = 'escapecar_save_v1';
@@ -44,6 +54,7 @@ export function defaultSave(): SaveData {
     leaderboard: [],
     totalRuns: 0,
     muted: false,
+    settings: { music: 0.5, sfx: 0.8, shake: 'full', reduceFlashing: false },
   };
 }
 
@@ -69,6 +80,7 @@ export class SaveStore {
         ownedWeapons: parsed.ownedWeapons?.length ? parsed.ownedWeapons : base.ownedWeapons,
         ownedGadgets: parsed.ownedGadgets?.length ? parsed.ownedGadgets : base.ownedGadgets,
         leaderboard: Array.isArray(parsed.leaderboard) ? parsed.leaderboard : [],
+        settings: { ...base.settings, ...(parsed.settings ?? {}) },
       };
     } catch {
       return base;

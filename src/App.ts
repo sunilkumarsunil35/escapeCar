@@ -10,7 +10,8 @@ import { Game, type RunResult } from './game/Game';
 import { loadoutFromSave } from './game/Loadout';
 import { GarageScene } from './garage/GarageScene';
 import { GarageUI } from './ui/GarageUI';
-import { CalibratePrompt, PairModal, PauseMenu, WreckedScreen } from './ui/Screens';
+import { CalibratePrompt, PairModal, PauseMenu, SettingsPanel, WreckedScreen } from './ui/Screens';
+import type { Settings } from './core/Save';
 import { AdminPanel } from './admin/AdminPanel';
 import type { LeaderEntry } from './core/Save';
 
@@ -52,10 +53,12 @@ export class App {
   private pauseMenu!: PauseMenu;
   private calibrate!: CalibratePrompt;
   private pair!: PairModal;
+  private settings!: SettingsPanel;
   private admin: AdminPanel | null = null;
   private mode: Mode = 'boot';
   private uiRoot: HTMLElement;
   private readonly adminEnabled: boolean;
+  private readonly debugPerf = new URLSearchParams(location.search).has('debug');
 
   constructor() {
     const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
@@ -137,6 +140,15 @@ export class App {
     };
     this.calibrate.onCancel = () => this.calibrate.show(false);
 
+    this.settings = new SettingsPanel(this.uiRoot);
+    this.settings.onChange = (s) => {
+      this.save.data.settings = s;
+      this.save.save();
+      this.applySettings(s);
+    };
+    this.garageUI.onSettings = () => this.settings.open(this.save.data.settings);
+    this.pauseMenu.onSettings = () => this.settings.open(this.save.data.settings);
+    this.applySettings(this.save.data.settings);
     this.pair = new PairModal(this.uiRoot, this.host);
     this.pair.onClose = () => this.garageUI.refresh();
   }
@@ -174,7 +186,61 @@ export class App {
     };
   }
 
+  private applySettings(s: Settings): void {
+    audio.setVolumes(s.music, s.sfx);
+    this.game.rig.shakeScale = s.shake === 'full' ? 1 : s.shake === 'reduced' ? 0.4 : 0;
+    this.game.reduceFlashing = s.reduceFlashing;
+  }
+
+  /** Gamepad menu navigation: A = confirm (play / retry / resume), Start = pause, B = back. */
+  private gamepadMenus(): void {
+    const i = this.input;
+    i.updatePad();
+    if (this.settings.visible) {
+      if (i.padPressed('back') || i.padPressed('confirm')) this.settings.show(false);
+      return;
+    }
+    if (this.mode === 'garage' && i.padPressed('confirm')) void this.requestRun();
+    else if (this.mode === 'run') {
+      if (i.padPressed('pause')) this.togglePause();
+      else if (this.game.state === 'paused' && i.padPressed('confirm')) this.togglePause();
+      else if (this.game.state === 'paused' && i.padPressed('back')) {
+        this.pauseMenu.show(false, false);
+        this.toGarage();
+      } else if (this.wrecked.visible && i.padPressed('confirm')) this.beginRun();
+      else if (this.wrecked.visible && i.padPressed('back')) this.toGarage();
+    }
+  }
+
+  private perfEl: HTMLDivElement | null = null;
+  private perfAcc = { t: 0, frames: 0, worst: 0 };
+
+  /** ?debug overlay: FPS, frame time, draw calls and triangles (measure before optimizing). */
+  private updatePerfHud(dt: number): void {
+    if (!this.perfEl) {
+      this.perfEl = document.createElement('div');
+      this.perfEl.className = 'perf-hud';
+      this.uiRoot.appendChild(this.perfEl);
+      this.engine.renderer.info.autoReset = false;
+    }
+    const a = this.perfAcc;
+    a.t += dt;
+    a.frames++;
+    a.worst = Math.max(a.worst, dt);
+    if (a.t >= 0.5) {
+      const info = this.engine.renderer.info;
+      this.perfEl.textContent = `${Math.round(a.frames / a.t)} FPS  avg ${((a.t / a.frames) * 1000).toFixed(1)} ms  worst ${(a.worst * 1000).toFixed(1)} ms
+${info.render.calls} draws  ${Math.round(info.render.triangles / 1000)}k tris`;
+      a.t = 0;
+      a.frames = 0;
+      a.worst = 0;
+    }
+    this.engine.renderer.info.reset();
+  }
+
   private frame(dt: number): void {
+    if (this.debugPerf) this.updatePerfHud(dt);
+    if (this.mode !== 'boot' && this.mode !== 'admin') this.gamepadMenus();
     switch (this.mode) {
       case 'garage':
         this.garage.update(dt);
@@ -194,6 +260,7 @@ export class App {
   }
 
   private toGarage(): void {
+    audio.setMusicIntensity(0.5);
     this.game.stop();
     this.wrecked.hide();
     this.pauseMenu.show(false, false);

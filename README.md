@@ -23,6 +23,10 @@ npm run build        # typecheck + production build to dist/
 | Slow down / reverse | S / ↓ | Pull joystick down (reverses once stopped) | Both zones held |
 | Pause | Esc / P | ❚❚ | — |
 
+**Gamepad** (any standard controller): left stick steer · RT / A fire · RB / B drift · X gadget · Y / LB nitro · LT slow down · Start pause (A = confirm, B = back in menus).
+
+**Settings** (⚙ in the garage, or SETTINGS in the pause menu): music and SFX volume, screen shake (full / reduced / off), reduce flashing.
+
 Drift for 1.5 s to charge **Blue Turbo**, or 3.0 s for **Orange Turbo** (rams bikes). Release the drift button to fire the turbo. Landing a ramp jump also gives an Orange Turbo.
 
 ## QR pairing
@@ -44,6 +48,8 @@ Use **Revert to procedural** to set `url` back to `null`.
 
 `?debug` lets you press keys 1–4 to jump straight to that Heat level.
 
+`?debug` also shows a live performance overlay (FPS, frame time, draw calls, triangles). `tools/perf-probe.js` measures frame-time percentiles: `await import('/tools/perf-probe.js'); __perfProbe({ heat: 3, frames: 900 })`.
+
 `tools/playtest-bot.js` is an automated playtester for balancing. With `npm run dev` running, open `/?debug`, load it in the console with `await import('/tools/playtest-bot.js')`, then run `__summarize(await __runBot({ runs: 3, maxSeconds: 300 }))`. It drives with real damage and reports spawns (including on-screen pop-ins), engagement, damage sources, deaths and kills.
 
 ## Optional global leaderboard
@@ -64,3 +70,7 @@ src/
   admin/       ?admin=true inspector
 vite.config.ts  local-asset-saver middleware
 ```
+
+## Agent skills
+
+`.claude/skills/` contains game-dev skills from [awesome-gamedev-agent-skills](https://github.com/gamedev-skills/awesome-gamedev-agent-skills) (Apache-2.0). Claude Code loads them automatically for this project. See `.claude/skills/_third_party/README.md` for attribution and the list of changes.

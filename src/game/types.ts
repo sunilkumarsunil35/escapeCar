@@ -9,6 +9,8 @@ import type { Ambient } from './Ambient';
 import type { HeatDef, PowerupId } from '../data/config';
 import type { GameEvent } from './Objectives';
 
+export type FeedbackTier = 'small' | 'medium' | 'large';
+
 /** Shared runtime context passed to every gameplay system each frame. */
 export interface GameCtx {
   player: PlayerCar;
@@ -28,5 +30,7 @@ export interface GameCtx {
   nearMiss(): void;
   reportEvent(type: GameEvent, amount?: number): void;
   shake(amount: number): void;
+  /** Layered juice scaled by importance: shake + hit-stop + flash (game-feel tiers). */
+  feedback(tier: FeedbackTier, at?: THREE.Vector3): void;
   toast(text: string, cls?: string): void;
 }

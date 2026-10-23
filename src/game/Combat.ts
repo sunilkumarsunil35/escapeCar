@@ -8,6 +8,7 @@ import type { Enemy } from './Enemies';
 import type { Hazard } from './Hazards';
 import type { Loadout } from './Loadout';
 import { audio } from '../core/Audio';
+import { sv } from '../core/scratch';
 
 type Target = { kind: 'enemy'; enemy: Enemy } | { kind: 'barrel'; barrel: Hazard };
 
@@ -54,6 +55,8 @@ export class Combat {
   private oils: Oil[] = [];
   private turretYaw = 0;
   private turretPitch = 0;
+  /** Cached Target wrappers so auto-aim allocates nothing per frame. */
+  private targetCache = new Map<object, Target>();
   /** True once the turret has swung onto the current target (hits only land when aligned). */
   private aligned = false;
   private tmp = new THREE.Vector3();
@@ -146,13 +149,38 @@ export class Combat {
         best = t;
       }
     };
-    for (const e of ctx.enemies.targets()) consider(e.aimPos, { kind: 'enemy', enemy: e }, e.isChopper ? -4 : 0, e.isChopper ? 1.5 : 1);
-    for (const b of ctx.hazards.targetableBarrels()) {
+    const list = ctx.enemies.list;
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i];
+      if (e.alive) consider(e.aimPos, this.enemyTarget(e), 0, 1);
+    }
+    const ch = ctx.enemies.chopper;
+    if (ch.alive) consider(ch.aimPos, this.enemyTarget(ch), -4, 1.5);
+    for (const b of ctx.hazards.barrelList) {
+      if (!b.active || b.broken > 0 || b.fuse > 0) continue;
       let nearEnemy = false;
-      for (const e of ctx.enemies.targets()) if (!e.isChopper && e.worldPos.distanceTo(b.pos) < 10) nearEnemy = true;
-      consider(b.pos, { kind: 'barrel', barrel: b }, nearEnemy ? -6 : 10, 1);
+      for (let i = 0; i < list.length && !nearEnemy; i++) if (list[i].alive && list[i].worldPos.distanceToSquared(b.pos) < 100) nearEnemy = true;
+      consider(b.pos, this.barrelTarget(b), nearEnemy ? -6 : 10, 1);
     }
     return best;
+  }
+
+  private enemyTarget(e: Enemy): Target {
+    let t = this.targetCache.get(e);
+    if (!t) {
+      t = { kind: 'enemy', enemy: e };
+      this.targetCache.set(e, t);
+    }
+    return t;
+  }
+
+  private barrelTarget(b: Hazard): Target {
+    let t = this.targetCache.get(b);
+    if (!t) {
+      t = { kind: 'barrel', barrel: b };
+      this.targetCache.set(b, t);
+    }
+    return t;
   }
 
   private sameTarget(a: Target, b: Target): boolean {
@@ -220,12 +248,12 @@ export class Combat {
       const range = end.distanceTo(muzzle);
       const hitChance = range < 12 ? 1 : Math.max(0.3, 1 - (range - 12) / 30);
       if (Math.random() < hitChance) {
-        end.add(new THREE.Vector3(rand(-0.3, 0.3), rand(-0.2, 0.3), rand(-0.3, 0.3)));
+        end.add(sv(rand(-0.3, 0.3), rand(-0.2, 0.3), rand(-0.3, 0.3)));
         this.hitTarget(this.target, this.weapon.damage, ctx);
         ctx.fx.sparkBurst(end, null, 3, 0xffd060, 6, 1, 0.35, 0.2);
       } else {
-        end.add(new THREE.Vector3(rand(-2.2, 2.2), rand(-0.9, 1.6), rand(-2.2, 2.2)));
-        if (end.y < 0.3) ctx.fx.sparkBurst(end.setY(0.05), new THREE.Vector3(0, 1, 0), 2, 0xffc050, 4, 0.8, 0.25, 0.15);
+        end.add(sv(rand(-2.2, 2.2), rand(-0.9, 1.6), rand(-2.2, 2.2)));
+        if (end.y < 0.3) ctx.fx.sparkBurst(end.setY(0.05), sv(0, 1, 0), 2, 0xffc050, 4, 0.8, 0.25, 0.15);
       }
     } else {
       const dir = this.tmp2.set(0, 0, -1);
@@ -233,7 +261,7 @@ export class Combat {
       else dir.set(-Math.sin(p.yaw), 0, -Math.cos(p.yaw));
       end = dir.multiplyScalar(this.weapon.range).add(muzzle);
     }
-    const dir = end.clone().sub(muzzle).normalize();
+    const dir = sv().subVectors(end, muzzle).normalize();
     ctx.fx.muzzleFlash(muzzle, dir, 1.0);
     ctx.fx.tracer(muzzle, end, 0xffd36b, 0.07);
     audio.gun();
@@ -277,20 +305,22 @@ export class Combat {
       m.trailT -= dt;
       if (m.trailT <= 0) {
         m.trailT = 0.025;
-        ctx.fx.puff(m.obj.position, new THREE.Vector3(rand(-0.5, 0.5), rand(0, 0.8), rand(-0.5, 0.5)), 0.35, 0.6);
-        ctx.fx.flame(m.obj.position, m.vel.clone().multiplyScalar(-0.1), 0.25, 0.12);
+        ctx.fx.puff(m.obj.position, sv(rand(-0.5, 0.5), rand(0, 0.8), rand(-0.5, 0.5)), 0.35, 0.6);
+        ctx.fx.flame(m.obj.position, sv(m.vel.x * -0.1, m.vel.y * -0.1, m.vel.z * -0.1), 0.25, 0.12);
       }
       let hit = m.obj.position.y < 0.15 || m.life <= 0;
       if (!hit && m.target && this.targetValid(m.target)) {
         hit = this.targetPos(m.target, this.tmp).distanceTo(m.obj.position) < 2.0;
       }
       if (!hit) {
-        for (const e of ctx.enemies.targets()) {
-          if (e.aimPos.distanceTo(m.obj.position) < 1.8) {
+        for (const e of ctx.enemies.list) {
+          if (e.alive && e.aimPos.distanceToSquared(m.obj.position) < 3.24) {
             hit = true;
             break;
           }
         }
+        const ch = ctx.enemies.chopper;
+        if (!hit && ch.alive && ch.aimPos.distanceToSquared(m.obj.position) < 3.24) hit = true;
       }
       if (hit) {
         m.active = false;
@@ -389,7 +419,7 @@ export class Combat {
     const ctx = this.ctx;
     if (!ctx) return;
     ctx.fx.explosion(pos, Math.max(0.8, radius / 6));
-    ctx.shake(Math.min(0.9, radius * 0.06 + 0.15));
+    ctx.feedback(radius >= 8 ? 'medium' : 'small', pos);
     for (const e of ctx.enemies.list) {
       if (!e.alive) continue;
       const d = e.worldPos.distanceTo(pos);

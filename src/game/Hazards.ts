@@ -50,6 +50,10 @@ export class HazardManager {
   readonly root = new THREE.Group();
   private barricades: Hazard[] = [];
   private barrels: Hazard[] = [];
+  /** Read-only view for auto-aim (avoids a per-frame generator). */
+  get barrelList(): readonly Hazard[] {
+    return this.barrels;
+  }
   private ramps: Hazard[] = [];
   private cones: Hazard[] = [];
   /** Barricades + barrels, pre-joined so the per-frame loop allocates nothing. */
@@ -417,7 +421,8 @@ export class HazardManager {
       }
       if (h.kind === 'cone') {
         // Traffic & chasers clip cones too
-        for (const c of ctx.ambient.solidBodies()) {
+        for (const c of ctx.ambient.civList) {
+          if (!c.active || c.smashed > 0) continue;
           if (Math.abs(c.dist - h.dist) < 2.2 && Math.abs(c.lat - h.lat) < 1.2) {
             this.smash(h, new THREE.Vector3(0, 0, 0));
             break;

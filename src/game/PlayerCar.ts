@@ -7,6 +7,7 @@ import { buildLoadoutModel, computeStats, type CarStats, type Loadout } from './
 import type { FrameInput } from '../input/Input';
 import type { Effects } from './Effects';
 import { audio } from '../core/Audio';
+import { sv } from '../core/scratch';
 
 interface WheelRef {
   socket: THREE.Object3D;
@@ -78,6 +79,8 @@ export class PlayerCar {
   onBoost: ((tier: number, source: 'drift' | 'ramp') => void) | null = null;
   private tmp = new THREE.Vector3();
   private tmp2 = new THREE.Vector3();
+  private rot = new THREE.Quaternion();
+  private rearWheels: WheelRef[] = [];
   private ray = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 });
 
   constructor(private physics: PhysicsWorld, private assets: AssetRegistry) {
@@ -166,6 +169,7 @@ export class PlayerCar {
       const front = name === 'wheel_FL' || name === 'wheel_FR';
       this.wheels.push({ socket: s, ...wheelParts(s), front, rear: !front });
     }
+    this.rearWheels = this.wheels.filter((w) => w.rear);
     const weapon = this.model.getObjectByName('equipped_weapon');
     this.turret = weapon?.getObjectByName('turret') ?? weapon ?? null;
     this.muzzles = [];
@@ -355,8 +359,8 @@ export class PlayerCar {
     this.vL = vL;
     this.vy = vy;
     this.body.setLinvel({ x: vx, y: vy, z: vz }, true);
-    const q = new THREE.Quaternion().setFromAxisAngle(UP, this.yaw);
-    this.body.setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }, true);
+    const q = this.rot.setFromAxisAngle(UP, this.yaw);
+    this.body.setRotation(q, true);
 
     // Landing
     if (this.grounded && !this.wasGrounded) {
@@ -422,7 +426,7 @@ export class PlayerCar {
     // --- Drift / boost effects ---
     this.fxTimer -= dt;
     this.skidTimer -= dt;
-    const rearWheels = this.wheels.filter((w) => w.rear);
+    const rearWheels = this.rearWheels;
     if (this.drift.active && this.grounded) {
       const side = this.tmp.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw)).multiplyScalar(-this.drift.dir);
       for (const w of rearWheels) {
@@ -430,13 +434,13 @@ export class PlayerCar {
         this.tmp2.y = 0.12;
         if (this.drift.tier >= 1) {
           const color = this.drift.tier >= 2 ? SPARK_ORANGE : SPARK_BLUE;
-          const back = new THREE.Vector3(Math.sin(this.yaw), 0.35, Math.cos(this.yaw)).add(side.clone().multiplyScalar(0.6));
+          const back = sv(Math.sin(this.yaw) + side.x * 0.6, 0.35, Math.cos(this.yaw) + side.z * 0.6);
           fx.sparkBurst(this.tmp2, back, this.drift.tier >= 2 ? 3 : 2, color, 9, 0.6, this.drift.tier >= 2 ? 0.75 : 0.6, 0.3);
         } else if (Math.random() < 0.4) {
-          fx.sparkBurst(this.tmp2, new THREE.Vector3(Math.sin(this.yaw), 0.4, Math.cos(this.yaw)), 1, 0xfff1a8, 6, 0.6, 0.35, 0.2);
+          fx.sparkBurst(this.tmp2, sv(Math.sin(this.yaw), 0.4, Math.cos(this.yaw)), 1, 0xfff1a8, 6, 0.6, 0.35, 0.2);
         }
         if (this.fxTimer <= 0) {
-          fx.puff(this.tmp2, new THREE.Vector3(Math.sin(this.yaw) * 3 + rand(-1, 1), rand(0.5, 1.5), Math.cos(this.yaw) * 3 + rand(-1, 1)), rand(0.35, 0.6), rand(0.5, 0.9));
+          fx.puff(this.tmp2, sv(Math.sin(this.yaw) * 3 + rand(-1, 1), rand(0.5, 1.5), Math.cos(this.yaw) * 3 + rand(-1, 1)), rand(0.35, 0.6), rand(0.5, 0.9));
         }
         if (this.skidTimer <= 0) fx.skid(this.tmp2, this.yaw + this.visualDriftYaw);
       }
@@ -445,18 +449,18 @@ export class PlayerCar {
     }
     if (this.boosting && this.exhaust) {
       this.exhaust.getWorldPosition(this.tmp2);
-      const back = new THREE.Vector3(Math.sin(this.yaw), 0.1, Math.cos(this.yaw)).multiplyScalar(6);
+      const back = sv(Math.sin(this.yaw) * 6, 0.6, Math.cos(this.yaw) * 6);
       if (this.boost.tier >= 2 || this.nitro > 0) fx.flame(this.tmp2, back, rand(0.35, 0.55), 0.25);
       else if (Math.random() < 0.6) fx.flame(this.tmp2, back, rand(0.2, 0.32), 0.18);
       if (Math.random() < 0.3) fx.puff(this.tmp2, back.multiplyScalar(0.5), 0.3, 0.6);
     } else if (this.exhaust && Math.random() < dt * 6) {
       this.exhaust.getWorldPosition(this.tmp2);
-      fx.puff(this.tmp2, new THREE.Vector3(Math.sin(this.yaw) * 2, 0.6, Math.cos(this.yaw) * 2), 0.18, 0.5, 0xdddddd);
+      fx.puff(this.tmp2, sv(Math.sin(this.yaw) * 2, 0.6, Math.cos(this.yaw) * 2), 0.18, 0.5, 0xdddddd);
     }
     if (this.scraping && Math.random() < 0.7) {
       const side = Math.sign(this.lat);
       this.tmp2.set(Math.cos(this.yaw) * side * this.halfExt.x, 0.5, -Math.sin(this.yaw) * side * this.halfExt.x).add(this.renderPos);
-      fx.sparkBurst(this.tmp2, new THREE.Vector3(Math.sin(this.yaw), 0.5, Math.cos(this.yaw)), 2, 0xffc040, 10, 0.5, 0.45, 0.3);
+      fx.sparkBurst(this.tmp2, sv(Math.sin(this.yaw), 0.5, Math.cos(this.yaw)), 2, 0xffc040, 10, 0.5, 0.45, 0.3);
     }
   }
 
@@ -464,7 +468,7 @@ export class PlayerCar {
   muzzleWorld(i: number, out: THREE.Vector3): THREE.Vector3 {
     const m = this.muzzles[i % Math.max(1, this.muzzles.length)];
     if (m) return m.getWorldPosition(out);
-    return out.copy(this.renderPos).add(new THREE.Vector3(0, 1.4, 0));
+    return out.copy(this.renderPos).setY(this.renderPos.y + 1.4);
   }
 
   /** Half-width of the car's footprint across the road, accounting for its angle to the track. */

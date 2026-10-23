@@ -19,7 +19,7 @@ import { Ambient } from './Ambient';
 import { Objectives, type GameEvent } from './Objectives';
 import { Director } from './Director';
 import { CameraRig } from './CameraRig';
-import type { GameCtx } from './types';
+import type { FeedbackTier, GameCtx } from './types';
 import type { Loadout } from './Loadout';
 import { Hud, stars } from '../ui/Hud';
 import { WATER_UNIFORMS } from '../core/Palette';
@@ -71,6 +71,11 @@ export class Game implements GameCtx {
   private nearMissCash = 0;
   private vibeAcc = 0;
   private bikeStreak = 0;
+  /** Real-time seconds left in a hit-stop freeze. */
+  private hitStopT = 0;
+  /** Accessibility: skip full-screen flashes. */
+  reduceFlashing = false;
+  private popTmp = new THREE.Vector3();
   private lastBikeKill = -99;
   private lastVibe = 0;
   private tp: TrackPoint;
@@ -109,7 +114,8 @@ export class Game implements GameCtx {
     this.rig.constrain = (pos) => {
       if (!this.track.chunks.length) return;
       this.track.project(pos, this.player.dist - 8, camTp);
-      const limit = camTp.wall - 0.8;
+      // Stay clear of the wall line (and the coastal median barrier that sits just inside it).
+      const limit = camTp.wall - 1.6;
       if (Math.abs(camTp.lat) > limit) {
         this.track.sample(camTp.dist, Math.sign(camTp.lat) * limit, camPos);
         pos.x = camPos.x;
@@ -154,7 +160,8 @@ export class Game implements GameCtx {
       this.vibeAcc = 0;
       this.lastVibe = now;
     }
-    if (shake > 0) this.rig.shake(shake);
+    if (dmg >= 15) this.feedback('medium');
+    else if (shake > 0) this.rig.shake(shake);
     if (this.player.hp <= 0) this.wreck();
   }
 
@@ -164,6 +171,7 @@ export class Game implements GameCtx {
   }
 
   onEnemyKilled(e: Enemy): void {
+    this.popAt(e.worldPos, e.isChopper ? 4 : 2, `+$${e.def.cash}`, e.isChopper ? 'big' : e.kind === 'enemy_sedan' ? 'mid' : '');
     this.reportEvent(e.isChopper ? 'kill_chopper' : e.kind === 'enemy_sedan' ? 'kill_sedan' : 'kill_bike');
     this.combat.kills++;
     this.hazards.spawnCashBurst(e.worldPos.clone().setY(e.isChopper ? Math.max(2, e.alt) : 1.2), e.def.cash, e.dist);
@@ -180,6 +188,7 @@ export class Game implements GameCtx {
 
   collectCash(value: number): void {
     this.runCash += value;
+    this.popAt(this.player.renderPos, 2.6, `+$${value}`, 'cash');
     this.reportEvent('cash', value);
   }
 
@@ -239,12 +248,48 @@ export class Game implements GameCtx {
 
   nearMiss(): void {
     this.nearMissCash += NEAR_MISS_BONUS;
+    this.popAt(this.player.renderPos, 2.2, `NEAR MISS +$${NEAR_MISS_BONUS}`, 'gold');
     this.reportEvent('near_miss');
     this.hud.toast(`NEAR MISS +$${NEAR_MISS_BONUS}`, 'gold');
   }
 
   shake(amount: number): void {
     this.rig.shake(amount);
+  }
+
+  /**
+   * Importance tiers keep juice proportional (game-feel): small = light shake; medium = shake +
+   * 50 ms hit-stop; large = big shake + 120 ms hit-stop + white flash.
+   */
+  feedback(tier: FeedbackTier, _at?: THREE.Vector3): void {
+    if (tier === 'small') this.rig.shake(0.18);
+    else if (tier === 'medium') {
+      this.rig.shake(0.4);
+      this.hitStop(0.05);
+    } else {
+      this.rig.shake(0.85);
+      this.hitStop(0.12);
+      audio.duckMusic(0.4, 0.6);
+      this.flash(0.35);
+    }
+  }
+
+  /** Freeze-frame: game time crawls for `seconds` of real time (input & shake keep running). */
+  hitStop(seconds: number): void {
+    this.hitStopT = Math.max(this.hitStopT, seconds);
+  }
+
+  private flash(strength: number): void {
+    if (!this.reduceFlashing) this.hud.whiteFlash(strength);
+  }
+
+  /** Floating "+$" number above a world position. */
+  private popAt(pos: THREE.Vector3, lift: number, text: string, cls: string): void {
+    const v = this.popTmp.copy(pos);
+    v.y += lift;
+    v.project(this.camera);
+    if (v.z > 1 || Math.abs(v.x) > 1.1 || Math.abs(v.y) > 1.1) return;
+    this.hud.pop(text, (v.x * 0.5 + 0.5) * window.innerWidth, (-v.y * 0.5 + 0.5) * window.innerHeight, cls);
   }
 
   toast(text: string, cls = ''): void {
@@ -267,6 +312,7 @@ export class Game implements GameCtx {
     this.runCash = 0;
     this.nearMissCash = 0;
     this.vibeAcc = 0;
+    this.hitStopT = 0;
     this.acc = 0;
     this.player.dist = 0;
     this.player.lat = 0;
@@ -281,12 +327,14 @@ export class Game implements GameCtx {
     this.hud.setLinked(this.host.connected);
     this.hud.showBanner('ESCAPE!', 'start', 1.4);
     audio.startEngine();
+    audio.setMusicIntensity(1);
   }
 
   pause(): void {
     if (this.state !== 'playing') return;
     this.state = 'paused';
     audio.stopEngine();
+    audio.setMusicIntensity(0.5);
     this.input.setTouchVisible(false);
   }
 
@@ -294,6 +342,7 @@ export class Game implements GameCtx {
     if (this.state !== 'paused') return;
     this.state = 'playing';
     audio.startEngine();
+    audio.setMusicIntensity(this.director.heat.level);
     this.input.resetTransient();
     this.input.setTouchVisible(true);
   }
@@ -307,6 +356,7 @@ export class Game implements GameCtx {
   }
 
   private onHeat(h: HeatDef): void {
+    audio.setMusicIntensity(h.level);
     this.lighting.setPreset(h.preset, false, 5);
     this.track.biome = h.biome;
     this.hazards.heat = h;
@@ -327,10 +377,12 @@ export class Game implements GameCtx {
     const p = this.player.renderPos.clone().setY(1);
     this.fx.explosion(p, 2.2, 0x8c2a1e);
     this.rig.shake(1.2);
+    this.flash(0.5);
     this.host.vibrate(400);
     navigator.vibrate?.(300);
     audio.wreck();
     audio.stopEngine();
+    audio.setMusicIntensity(0.5);
     this.hud.showBanner('W R E C K E D', 'wrecked', 3);
   }
 
@@ -367,7 +419,9 @@ export class Game implements GameCtx {
       for (let i = 1; i <= 4; i++) if (this.input.isKeyDown(`Digit${i}`)) this.director.skipTo(i);
     }
     const wrecking = this.state === 'wrecking';
-    const sdt = dt * (wrecking ? WRECK_TIME_SCALE : 1);
+    const frozen = this.hitStopT > 0;
+    if (frozen) this.hitStopT -= dt;
+    const sdt = dt * (wrecking ? WRECK_TIME_SCALE : 1) * (frozen ? 0.04 : 1);
     const carInput = this.player.dead ? NEUTRAL : input;
     if (input.nitroPressed && this.state === 'playing') this.fireNitro();
 
@@ -412,7 +466,7 @@ export class Game implements GameCtx {
     this.combat.update(sdt, wrecking ? NEUTRAL : input, this);
     this.player.updateVisual(alpha, sdt, this.fx);
     this.fx.update(sdt);
-    this.rig.update(this.player, wrecking ? dt : sdt, wrecking);
+    this.rig.update(this.player, wrecking ? dt : sdt, wrecking, dt);
     this.lighting.update(sdt, this.player.renderPos, this.camera);
     this.skyline.position.set(this.camera.position.x, 0, this.camera.position.z);
     this.updateHeadlight();

@@ -217,6 +217,23 @@ button { font-family: inherit; cursor: pointer; }
   .hud-combo { top: calc(62px + var(--safe-t)); }
   .hud-combo-mult { font-size: 30px; }
 }
+.hud-flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+.hud-flash.go { animation: whiteFlash 0.22s ease-out forwards; }
+@keyframes whiteFlash { 0% { opacity: var(--a, 0.35); } 100% { opacity: 0; } }
+.hud-pops { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.hud-pop { position: absolute; transform: translate(-50%, -50%); font-family: var(--font-title); font-size: 18px; color: #86efac; text-shadow: 0 3px 0 #14532d, 0 0 8px rgba(0, 0, 0, 0.6); opacity: 0; white-space: nowrap; }
+.hud-pop.mid { font-size: 22px; }
+.hud-pop.big { font-size: 34px; color: #fde68a; text-shadow: 0 4px 0 #78350f, 0 0 16px rgba(251, 191, 36, 0.8); }
+.hud-pop.gold { font-size: 15px; color: #fde68a; text-shadow: 0 2px 0 #78350f; }
+.hud-pop.cash { font-size: 14px; }
+.hud-pop.go { animation: numPop 0.95s cubic-bezier(0.2, 0.9, 0.3, 1) forwards; }
+@keyframes numPop {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+  15% { opacity: 1; transform: translate(-50%, -70%) scale(1.35); }
+  30% { transform: translate(-50%, -80%) scale(1); }
+  75% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -190%) scale(0.95); }
+}
 .hud-arrow { position: absolute; font-size: 40px; font-weight: 900; color: var(--red); text-shadow: 0 0 12px rgba(239, 68, 68, 0.9), 0 2px 0 #000; opacity: 0; }
 .hud-arrow.left { left: calc(10px + var(--safe-l)); top: 50%; transform: translateY(-50%); }
 .hud-arrow.right { right: calc(10px + var(--safe-r)); top: 50%; transform: translateY(-50%); }
@@ -436,3 +453,18 @@ body.controller-mode { background: #0b0f1a; }
 .ctl-start p { margin: 0; opacity: 0.8; }
 .ctl-start-btn { padding: 16px 26px; border-radius: 14px; border: none; background: linear-gradient(180deg, #fb923c, #dc2626); color: #fff; font-family: var(--font-title); font-size: 18px; box-shadow: 0 5px 0 #7f1d1d; }
 .ctl-hint { font-size: 12px; }
+
+/* ---------- Settings ---------- */
+.s-card { width: min(420px, 92vw); text-align: left; }
+.s-card h1 { text-align: center; }
+.s-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-weight: 900; font-size: 13px; letter-spacing: 0.08em; }
+.s-row input[type=range] { flex: 1; max-width: 220px; accent-color: var(--amber); }
+.s-seg { display: flex; gap: 4px; }
+.s-seg button { padding: 7px 10px !important; font-size: 11px !important; }
+.s-seg button.on { background: var(--amber) !important; color: var(--ink) !important; border-color: var(--amber) !important; }
+.s-check { justify-content: flex-start; }
+.s-check input { width: 18px; height: 18px; accent-color: var(--amber); }
+.s-close { background: var(--amber) !important; color: var(--ink) !important; border: none !important; }
+
+/* ---------- Debug perf overlay (?debug) ---------- */
+.perf-hud { position: absolute; left: 8px; bottom: 8px; z-index: 50; pointer-events: none !important; font: 11px/1.35 ui-monospace, Consolas, monospace; color: #a7f3d0; background: rgba(0, 0, 0, 0.6); padding: 4px 7px; border-radius: 6px; white-space: pre; }
