@@ -1,3 +1,4 @@
+import type { SpeakerMode } from './Audio';
 import type { CarId, GadgetId, UpgradeCategory, WeaponId } from '../data/config';
 
 export interface LeaderEntry {
@@ -12,6 +13,7 @@ export type ShakeLevel = 'full' | 'reduced' | 'off';
 export interface Settings {
   music: number;
   sfx: number;
+  speakers: SpeakerMode;
   shake: ShakeLevel;
   reduceFlashing: boolean;
 }
@@ -54,7 +56,7 @@ export function defaultSave(): SaveData {
     leaderboard: [],
     totalRuns: 0,
     muted: false,
-    settings: { music: 0.5, sfx: 0.8, shake: 'full', reduceFlashing: false },
+    settings: { music: 0.5, sfx: 0.8, speakers: 'stereo', shake: 'full', reduceFlashing: false },
   };
 }
 

@@ -2,6 +2,7 @@ import QRCode from 'qrcode';
 import { formatCash, formatTime } from '../core/math';
 import type { RunResult } from '../game/Game';
 import type { LeaderEntry, Settings, ShakeLevel } from '../core/Save';
+import type { SpeakerMode } from '../core/Audio';
 import type { PeerHost, HostStatus } from '../input/PeerHost';
 import { stars } from './Hud';
 
@@ -237,11 +238,11 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
 }
 
-/** Audio + accessibility settings (music/SFX buses, screen shake level, reduce flashing). */
+/** Audio + accessibility settings (music/SFX buses, speaker profile, screen shake level, reduce flashing). */
 export class SettingsPanel {
   readonly el: HTMLDivElement;
   onChange: ((s: Settings) => void) | null = null;
-  private value: Settings = { music: 0.5, sfx: 0.8, shake: 'full', reduceFlashing: false };
+  private value: Settings = { music: 0.5, sfx: 0.8, speakers: 'stereo', shake: 'full', reduceFlashing: false };
 
   constructor(root: HTMLElement) {
     this.el = document.createElement('div');
@@ -251,6 +252,9 @@ export class SettingsPanel {
         <h1>SETTINGS</h1>
         <label class="s-row">MUSIC <input type="range" min="0" max="1" step="0.05" data-k="music" /></label>
         <label class="s-row">SOUND FX <input type="range" min="0" max="1" step="0.05" data-k="sfx" /></label>
+        <div class="s-row">SPEAKERS
+          <div class="s-seg">${(['stereo', 'headphones', 'mono'] as SpeakerMode[]).map((v) => `<button data-speakers="${v}">${v.toUpperCase()}</button>`).join('')}</div>
+        </div>
         <div class="s-row">SCREEN SHAKE
           <div class="s-seg">${(['full', 'reduced', 'off'] as ShakeLevel[]).map((v) => `<button data-shake="${v}">${v.toUpperCase()}</button>`).join('')}</div>
         </div>
@@ -276,6 +280,13 @@ export class SettingsPanel {
         this.emit();
       }),
     );
+    this.el.querySelectorAll<HTMLButtonElement>('[data-speakers]').forEach((b) =>
+      b.addEventListener('click', () => {
+        this.value.speakers = b.dataset.speakers as SpeakerMode;
+        this.sync();
+        this.emit();
+      }),
+    );
     (this.el.querySelector('.s-close') as HTMLButtonElement).addEventListener('click', () => this.show(false));
     this.el.addEventListener('click', (e) => {
       if (e.target === this.el) this.show(false);
@@ -291,6 +302,7 @@ export class SettingsPanel {
     (this.el.querySelector('[data-k=sfx]') as HTMLInputElement).value = String(this.value.sfx);
     (this.el.querySelector('[data-k=reduceFlashing]') as HTMLInputElement).checked = this.value.reduceFlashing;
     this.el.querySelectorAll<HTMLButtonElement>('[data-shake]').forEach((b) => b.classList.toggle('on', b.dataset.shake === this.value.shake));
+    this.el.querySelectorAll<HTMLButtonElement>('[data-speakers]').forEach((b) => b.classList.toggle('on', b.dataset.speakers === this.value.speakers));
   }
 
   open(current: Settings): void {

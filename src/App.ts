@@ -188,6 +188,7 @@ export class App {
 
   private applySettings(s: Settings): void {
     audio.setVolumes(s.music, s.sfx);
+    audio.setSpeakerMode(s.speakers);
     this.game.rig.shakeScale = s.shake === 'full' ? 1 : s.shake === 'reduced' ? 0.4 : 0;
     this.game.reduceFlashing = s.reduceFlashing;
   }
