@@ -2,6 +2,7 @@ import {
   CARS, CAR_ORDER, GADGETS, GADGET_ORDER, PAINTS, PAINT_PRICE, UPGRADES, WEAPONS, WEAPON_ORDER, paintColor,
   type CarId, type GadgetId, type PaintId, type UpgradeCategory, type WeaponId, MODES } from '../data/config';
 import { formatCash, formatTime } from '../core/math';
+import { LocationMenu } from './LocationMenu';
 import type { SaveStore } from '../core/Save';
 import { computeStats, loadoutFromSave, type Loadout } from '../game/Loadout';
 import type { PreviewKind } from '../garage/GarageScene';
@@ -41,6 +42,7 @@ export class GarageUI {
   onPreview: ((kind: PreviewKind, id: string | null, tier: number) => void) | null = null;
   onAdmin: (() => void) | null = null;
   onSettings: (() => void) | null = null;
+  readonly locations: LocationMenu;
 
   constructor(root: HTMLElement, private save: SaveStore, private pairedLabel: () => string, showAdmin: boolean) {
     this.el = document.createElement('div');
@@ -72,11 +74,13 @@ export class GarageUI {
         <div class="g-actions">
           <div class="g-detail"></div>
           <button class="g-buy"></button>
-          <button class="g-mode" title="Switch location"></button>
+          <button class="g-mode" title="Choose location"></button>
           <button class="g-play">ESCAPE <span>›››</span></button>
         </div>
       </div>`;
     root.appendChild(this.el);
+    this.locations = new LocationMenu(root, save);
+    this.locations.onChange = () => this.refresh();
     const q = <T extends HTMLElement>(s: string): T => this.el.querySelector(s) as T;
     q('.g-prev').addEventListener('click', () => this.cycleCar(-1));
     q('.g-next').addEventListener('click', () => this.cycleCar(1));
@@ -93,9 +97,7 @@ export class GarageUI {
     q('.g-mode').addEventListener('click', () => {
       audio.unlock();
       audio.click();
-      this.save.data.mode = this.save.data.mode === 'desert' ? 'city' : 'desert';
-      this.save.save();
-      this.refresh();
+      this.locations.show(true);
     });
     q('.g-settings').addEventListener('click', () => {
       audio.unlock();
@@ -252,7 +254,8 @@ export class GarageUI {
     const mode = MODES[d.mode];
     const modeBtn = this.el.querySelector('.g-mode') as HTMLElement;
     modeBtn.classList.toggle('desert', d.mode === 'desert');
-    modeBtn.innerHTML = `<small>LOCATION ⇄</small>${d.mode === 'desert' ? '🏜' : '🏙'} ${mode.name.toUpperCase()}<em>${mode.tagline}</em>`;
+    modeBtn.classList.toggle('forest', d.mode === 'forest');
+    modeBtn.innerHTML = `<small>LOCATION ▾</small>${d.mode === 'desert' ? '🏜' : d.mode === 'forest' ? '🌲' : '🏙'} ${mode.name.toUpperCase()}<em>${mode.tagline}</em>`;
     (this.el.querySelector('.g-pair') as HTMLElement).textContent = this.pairedLabel();
     (this.el.querySelector('.g-mute') as HTMLElement).textContent = d.muted ? '🔇' : '🔊';
     this.el.querySelectorAll<HTMLButtonElement>('.g-tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === this.tab));

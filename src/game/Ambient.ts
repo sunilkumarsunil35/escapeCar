@@ -170,7 +170,7 @@ export class Ambient {
     const chunk = ctx.track.chunkAt(dist);
     let lat: number;
     let y: number;
-    if (chunk.biome === 'desert') {
+    if (chunk.biome === 'desert' || chunk.biome === 'forest') {
       ped.active = false;
       ped.obj.visible = false;
       return;

@@ -300,3 +300,98 @@ export function rampHullPoints(): Float32Array {
     -hw, height, -hl, hw, height, -hl,
   ]);
 }
+
+
+/**
+ * Overhead logging gantry spanning the road: two lattice towers just outside the walls and a
+ * truss beam at 9.6 m. Hanging tree loads (buildCraneLoad) slide along it.
+ */
+export function buildCraneGantry(halfSpan: number): THREE.Group {
+  const b = new GeoBuilder();
+  const yellow = 0xf2a81a;
+  const dark = 0x2b2d33;
+  for (const sx of [-1, 1]) {
+    const x = sx * (halfSpan + 1.3);
+    b.box(2.2, 0.5, 2.6, 0x8d8f94, [x, 0.25, 0]);
+    for (const dx of [-0.6, 0.6]) for (const dz of [-0.6, 0.6]) b.box(0.22, 10.2, 0.22, yellow, [x + dx, 5.35, dz]);
+    for (let y = 1.2; y < 10; y += 1.6) {
+      b.box(1.4, 0.12, 0.12, yellow, [x, y, 0.6]);
+      b.box(1.4, 0.12, 0.12, yellow, [x, y, -0.6]);
+      b.box(0.12, 0.12, 1.4, yellow, [x + 0.6, y, 0]);
+      b.box(0.12, 0.12, 1.4, yellow, [x - 0.6, y, 0]);
+    }
+    for (let i = 0; i < 6; i++) b.box(0.24, 0.5, 0.24, i % 2 ? yellow : dark, [x, 0.9 + i * 0.5, -0.75]);
+  }
+  const span = (halfSpan + 1.9) * 2;
+  b.box(span, 0.35, 0.3, yellow, [0, 10.4, 0.45]);
+  b.box(span, 0.35, 0.3, yellow, [0, 10.4, -0.45]);
+  b.box(span, 0.18, 0.18, yellow, [0, 11.3, 0]);
+  for (let x = -halfSpan; x <= halfSpan; x += 1.6) {
+    b.box(0.1, 1.0, 0.1, yellow, [x, 10.85, 0.42], { rot: [0, 0, 0.6] });
+    b.box(0.1, 1.0, 0.1, yellow, [x, 10.85, -0.42], { rot: [0, 0, -0.6] });
+  }
+  b.box(3.2, 0.9, 0.12, dark, [0, 11.0, -0.62]);
+  b.box(2.8, 0.5, 0.14, yellow, [0, 11.0, -0.64]);
+  const g = b.build({ castShadow: true });
+  g.name = 'crane_gantry';
+  const lamps = new THREE.Group();
+  for (const sx of [-1, 1]) {
+    const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.2, 0.25, 8), glowMat(0xff8a1a));
+    lamp.position.set(sx * (halfSpan + 1.3), 10.75, 0);
+    lamps.add(lamp);
+  }
+  lamps.name = 'lamps';
+  g.add(lamps);
+  return g;
+}
+
+/**
+ * A trolley with cables carrying a felled pine lying across the road. `width` is how much road
+ * the load blocks. The 'swing' child pivots at the trolley so the tree can sway.
+ */
+export function buildCraneLoad(width: number): THREE.Group {
+  const root = new THREE.Group();
+  const tb = new GeoBuilder();
+  tb.box(1.4, 0.6, 1.4, 0x2b2d33, [0, 10.0, 0]);
+  tb.box(1.0, 0.25, 1.0, 0xf2a81a, [0, 9.6, 0]);
+  root.add(tb.build());
+  const swing = new THREE.Group();
+  swing.name = 'swing';
+  swing.position.y = 9.5;
+  const b = new GeoBuilder();
+  const y = 1.9 - 9.5;
+  const cx = width * 0.4;
+  for (const sx of [-cx, cx]) b.box(0.1, 7.1, 0.1, 0x1d1e22, [sx * 0.5, -3.55, 0], { rot: [0, 0, sx > 0 ? -0.06 : 0.06] });
+  for (const sx of [-cx, cx]) b.box(0.1, 0.9, 0.9, 0xd94a2a, [sx, y + 0.1, 0]);
+  // Trunk across the road, root plate at one end, branches at the other
+  b.cyl(0.38, 0.5, width * 0.78, 8, BARK2, [-width * 0.1, y, 0], { rot: [0, 0, Math.PI / 2] });
+  b.cyl(0.62, 0.62, 0.25, 8, 0x4a3220, [-width * 0.5 + 0.12, y, 0], { rot: [0, 0, Math.PI / 2] });
+  b.cyl(0.46, 0.46, 0.04, 8, 0xc9a074, [-width * 0.5 - 0.02, y, 0], { rot: [0, 0, Math.PI / 2] });
+  for (let i = 0; i < 3; i++) {
+    const x = width * 0.12 + i * width * 0.13;
+    b.cone(0.95 - i * 0.18, width * 0.24, 7, i % 2 ? 0x2f5d34 : 0x356b3a, [x, y, 0], { rot: [0, 0, -Math.PI / 2] });
+  }
+  b.box(width * 0.7, 0.18, 0.22, 0x6e4b2c, [-width * 0.12, y + 0.42, 0.25]);
+  swing.add(b.build({ castShadow: true }));
+  root.add(swing);
+  root.name = 'crane_load';
+  return root;
+}
+
+/** Road pothole decal: dark broken asphalt with a chipped rim. */
+export function buildPothole(): THREE.Group {
+  const b = new GeoBuilder();
+  b.ico(1.25, 0x5a5650, [0, -0.02, 0], { scale: [1.15, 0.05, 0.95] });
+  b.ico(1.0, 0x1b1a1a, [0, 0.0, 0], { scale: [1.1, 0.05, 0.9] });
+  b.ico(0.55, 0x2a2622, [0.25, 0.01, -0.1], { scale: [1, 0.05, 0.8] });
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + 0.3;
+    b.box(0.07, 0.012, 0.7 + (i % 2) * 0.4, 0x2e2c2a, [Math.cos(a) * 1.45, 0.005, Math.sin(a) * 1.2], { rot: [0, -a, 0] });
+    b.box(0.2, 0.08, 0.16, 0x6a655d, [Math.cos(a + 0.6) * 1.2, 0.04, Math.sin(a + 0.6) * 1.0]);
+  }
+  const g = b.build({ receiveShadow: true });
+  g.name = 'pothole';
+  return g;
+}
+
+const BARK2 = 0x5a3c26;

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Engine } from '../core/Engine';
 import { FIXED_DT, PhysicsWorld } from '../core/Physics';
 import type { AssetRegistry } from '../assets/AssetRegistry';
-import { buildMesaRing, buildSkyline } from '../assets/procedural/environment';
+import { buildMesaRing, buildPineRing, buildSkyline } from '../assets/procedural/environment';
 import type { InputManager, FrameInput } from '../input/Input';
 import type { PeerHost } from '../input/PeerHost';
 import { MODES, NEAR_MISS_BONUS, NITRO_MAX_CHARGES, POWERUPS, heatLevelsFor, type HeatDef, type ModeDef, type ModeId, type PowerupId } from '../data/config';
@@ -36,7 +36,7 @@ export interface RunResult {
   objectiveCash: number;
   comboCash: number;
   bestCombo: number;
-  /** Extra cash from the location's multiplier (desert = +50%). */
+  /** Extra cash from the location's multiplier (desert +50%, forest +100%). */
   modeBonus: number;
   mode: ModeId;
   squashed: boolean;
@@ -68,6 +68,7 @@ export class Game implements GameCtx {
   readonly hud: Hud;
   private skyline: THREE.Group;
   private mesas: THREE.Group;
+  private pines: THREE.Group;
   mode: ModeDef = MODES.city;
   private headlight: THREE.SpotLight;
   state: State = 'idle';
@@ -103,6 +104,9 @@ export class Game implements GameCtx {
     this.mesas = buildMesaRing();
     this.mesas.visible = false;
     this.scene.add(this.mesas);
+    this.pines = buildPineRing();
+    this.pines.visible = false;
+    this.scene.add(this.pines);
     this.fx = new Effects(this.scene);
     this.player = new PlayerCar(this.physics, assets);
     this.scene.add(this.player.root);
@@ -322,14 +326,17 @@ export class Game implements GameCtx {
     this.enemies.reset();
     this.hazards.reset();
     this.hazards.rollersEnabled = this.mode.rollers;
+    this.hazards.potholesEnabled = this.mode.potholes;
+    this.hazards.cranesEnabled = this.mode.cranes;
     this.ambient.reset();
     this.director.reset(levels);
     this.objectives.reset();
     this.hazards.heat = levels[0];
     this.track.reset(levels[0].biome);
-    const desert = levels[0].biome === 'desert';
-    this.skyline.visible = !desert;
-    this.mesas.visible = desert;
+    const biome = levels[0].biome;
+    this.skyline.visible = biome === 'city' || biome === 'coastal';
+    this.mesas.visible = biome === 'desert';
+    this.pines.visible = biome === 'forest';
     this.player.spawn(loadout);
     this.player.rampHandles = new Set(this.hazards.rampHandles());
     this.combat.reset(loadout);
@@ -350,8 +357,9 @@ export class Game implements GameCtx {
     this.input.setTouchVisible(true);
     this.hud.show(true);
     this.hud.setLinked(this.host.connected);
-    this.hud.showBanner(desert ? 'DESERT RUN!' : 'ESCAPE!', 'start', 1.4);
-    if (desert) setTimeout(() => this.state === 'playing' && this.toast('Watch out for ROAD ROLLERS — jump them or dodge!', 'warn'), 1600);
+    this.hud.showBanner(this.mode.id === 'city' ? 'ESCAPE!' : `${this.mode.name.toUpperCase()}!`, 'start', 1.4);
+    const hint = this.mode.rollers ? 'Watch out for ROAD ROLLERS — jump them or dodge!' : this.mode.cranes ? 'Cranes swing trees across the road — find the gap! Mind the potholes.' : '';
+    if (hint) setTimeout(() => this.state === 'playing' && this.toast(hint, 'warn'), 1600);
     audio.startEngine();
     audio.setMusicIntensity(1);
   }
@@ -524,6 +532,7 @@ export class Game implements GameCtx {
     this.lighting.update(sdt, this.player.renderPos, this.camera);
     this.skyline.position.set(this.camera.position.x, 0, this.camera.position.z);
     this.mesas.position.set(this.camera.position.x, 0, this.camera.position.z);
+    this.pines.position.set(this.camera.position.x, 0, this.camera.position.z);
     this.updateHeadlight();
     this.updateThreats();
 

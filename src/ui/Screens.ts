@@ -5,6 +5,7 @@ import type { LeaderEntry, Settings, ShakeLevel } from '../core/Save';
 import type { SpeakerMode } from '../core/Audio';
 import type { PeerHost, HostStatus } from '../input/PeerHost';
 import { stars } from './Hud';
+import { MODES } from '../data/config';
 
 /** Slide-in game-over summary (doc §6.4). */
 export class WreckedScreen {
@@ -52,7 +53,7 @@ export class WreckedScreen {
       <div><span>Near-Miss Bonus</span><b>+${formatCash(r.nearMissCash)}</b></div>
       <div><span>Objectives (${r.objectivesDone})</span><b>+${formatCash(r.objectiveCash)}</b></div>
       <div><span>Combo Payouts (best x${r.bestCombo.toFixed(1)})</span><b>+${formatCash(r.comboCash)}</b></div>
-      ${r.modeBonus > 0 ? `<div class="bonus"><span>Desert Bonus (x1.5)</span><b>+${formatCash(r.modeBonus)}</b></div>` : ''}
+      ${r.modeBonus > 0 ? `<div class="bonus"><span>${MODES[r.mode].name.split(' ')[0]} Bonus (x${MODES[r.mode].cashMult})</span><b>+${formatCash(r.modeBonus)}</b></div>` : ''}
       <div class="total"><span>TOTAL EARNED</span><b>+${formatCash(r.total)}</b></div>
       <div class="score"><span>Score</span><b>${r.score.toLocaleString('en-US')}</b></div>`;
     (this.el.querySelector('.w-board-title') as HTMLElement).textContent = opts.global ? 'GLOBAL LEADERBOARD' : 'LOCAL LEADERBOARD';

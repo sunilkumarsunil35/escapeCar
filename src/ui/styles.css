@@ -484,3 +484,43 @@ body.controller-mode { background: #0b0f1a; }
 
 .w-earn .bonus b { color: #fbbf24; }
 .w-sub .squash { color: #fbbf24; letter-spacing: 0.08em; }
+
+.g-mode.forest { border-color: #86efac; background: linear-gradient(180deg, rgba(22, 101, 52, 0.55), rgba(20, 83, 45, 0.55)); }
+.g-mode.forest em { color: #bbf7d0; }
+
+/* Location picker: mini-wallpaper cards */
+.loc-menu { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: rgba(8, 6, 4, 0.72); backdrop-filter: blur(4px); padding: 16px; }
+.loc-menu.hidden { display: none; }
+.loc-panel { width: min(1000px, 100%); max-height: 100%; display: flex; flex-direction: column; gap: 12px; }
+.loc-head { display: flex; align-items: center; justify-content: space-between; }
+.loc-head h2 { margin: 0; font-family: var(--font-title); color: #fdf6e9; font-size: clamp(18px, 2.6vw, 30px); letter-spacing: 0.06em; }
+.loc-close { width: 40px; height: 40px; border-radius: 10px; border: 2px solid rgba(255, 255, 255, 0.3); background: rgba(255, 255, 255, 0.08); color: #fff; font-size: 18px; font-weight: 900; }
+.loc-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; overflow-y: auto; min-height: 0; }
+.loc-card { position: relative; display: flex; flex-direction: column; padding: 0; border-radius: 14px; overflow: hidden; border: 3px solid rgba(255, 255, 255, 0.18); background: #1d1915; color: #fdf6e9; text-align: left; cursor: pointer; transition: transform 0.12s ease, border-color 0.12s ease; }
+.loc-card:hover { transform: translateY(-3px); border-color: rgba(255, 255, 255, 0.5); }
+.loc-card.sel { border-color: #fb923c; box-shadow: 0 0 0 2px rgba(251, 146, 60, 0.35), 0 8px 24px rgba(0, 0, 0, 0.5); }
+.loc-art { display: block; width: 100%; aspect-ratio: 16 / 9; }
+.loc-ribbon { position: absolute; top: 8px; left: 8px; padding: 3px 8px; border-radius: 6px; background: #fb923c; color: #1d1915; font-size: 10px; font-weight: 900; letter-spacing: 0.1em; }
+.loc-cash { position: absolute; top: 8px; right: 8px; padding: 3px 8px; border-radius: 6px; background: rgba(21, 128, 61, 0.92); color: #fff; font-size: 12px; font-weight: 900; }
+.loc-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 6px; }
+.loc-name { font-family: var(--font-title); font-size: clamp(15px, 1.8vw, 21px); letter-spacing: 0.04em; }
+.loc-desert .loc-name { color: #fbbf24; }
+.loc-forest .loc-name { color: #86efac; }
+.loc-city .loc-name { color: #7dd3fc; }
+.loc-diff { display: flex; align-items: center; gap: 2px; font-size: 14px; }
+.loc-diff i { font-style: normal; opacity: 0.2; }
+.loc-diff span { margin-left: auto; font-size: 11px; font-weight: 800; opacity: 0.75; letter-spacing: 0.05em; }
+.loc-traps { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 4px; }
+.loc-traps li { padding: 2px 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.09); font-size: 10.5px; font-weight: 700; }
+@media (max-height: 500px) {
+  .loc-menu { padding: 8px 16px; }
+  .loc-panel { gap: 6px; }
+  .loc-close { width: 32px; height: 32px; font-size: 14px; }
+  .loc-cards { gap: 10px; }
+  .loc-art { aspect-ratio: 2 / 1; }
+  .loc-body { padding: 6px 8px 8px; gap: 4px; }
+  .loc-traps li { font-size: 9px; padding: 1px 6px; }
+}
+@media (max-width: 640px) and (min-height: 501px) {
+  .loc-cards { grid-template-columns: minmax(0, 1fr); }
+}

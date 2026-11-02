@@ -4,11 +4,11 @@ import { C } from '../../core/Palette';
 import { mulberry32 } from '../../core/math';
 import { ROAD } from '../../data/config';
 
-export type ChunkKind = 'straight' | 'curveL' | 'curveR' | 'highway' | 'desert' | 'desertL' | 'desertR';
+export type ChunkKind = 'straight' | 'curveL' | 'curveR' | 'highway' | 'desert' | 'desertL' | 'desertR' | 'forest' | 'forestL' | 'forestR';
 export const CURVE_TURN = Math.PI / 4; // 45° per curved chunk
 
 export function chunkTurn(kind: ChunkKind): number {
-  return kind === 'curveL' || kind === 'desertL' ? CURVE_TURN : kind === 'curveR' || kind === 'desertR' ? -CURVE_TURN : 0;
+  return kind === 'curveL' || kind === 'desertL' || kind === 'forestL' ? CURVE_TURN : kind === 'curveR' || kind === 'desertR' || kind === 'forestR' ? -CURVE_TURN : 0;
 }
 
 /** Local-frame centerline sample for a chunk that starts at the origin heading -Z. */
@@ -721,6 +721,122 @@ export function buildMesaRing(seed = 21): THREE.Group {
   return group;
 }
 
+const PINE = [0x2f5d34, 0x356b3a, 0x29522f, 0x3d7340, 0x24482a];
+const GRASS = [0x3f6b33, 0x46753a, 0x395f2f];
+const BARK = 0x5a3c26;
+
+function pine(b: GeoBuilder, rng: Rng, scale = 1): void {
+  const h = rr(rng, 7, 13) * scale;
+  const green = rpick(rng, PINE);
+  b.cyl(0.22 * scale, 0.32 * scale, h * 0.35, 6, BARK, [0, h * 0.175, 0]);
+  const tiers = 3 + Math.floor(rng() * 2);
+  for (let i = 0; i < tiers; i++) {
+    const t = i / tiers;
+    const r = (2.1 - t * 1.5) * scale * rr(rng, 0.9, 1.1);
+    b.cone(r, h * 0.38, 7, i % 2 ? green : rpick(rng, PINE), [0, h * (0.28 + t * 0.55) + h * 0.19, 0], { rot: [0, rng() * 3, 0] });
+  }
+}
+
+function fallenLog(b: GeoBuilder, rng: Rng): void {
+  const len = rr(rng, 3, 6);
+  b.cyl(0.35, 0.4, len, 7, BARK, [0, 0.35, 0], { rot: [0, 0, Math.PI / 2] });
+  b.cyl(0.3, 0.3, 0.05, 7, 0xc9a074, [len / 2 + 0.01, 0.35, 0], { rot: [0, 0, Math.PI / 2] });
+  b.ico(0.4, 0x4f7a3a, [rr(rng, -1, 1), 0.65, 0.1], { scale: [1.4, 0.4, 1] });
+}
+
+/** Misty pine-forest logging road: dark asphalt, dirt shoulders, dense pines, logs, ferns, timber yard. */
+function forestRoad(b: GeoBuilder, rng: Rng, turn: number, L: number, variant: number): void {
+  const segs = turn === 0 ? 1 : 10;
+  strip(b, turn, L, -ROAD.halfWidth, ROAD.halfWidth, 0, 0.3, 0x46484b, segs);
+  for (const lat of [-5, 5]) dashes(b, turn, L, lat, 0xdfe3e0, 3, 6, 0.16);
+  dashes(b, turn, L, 0, 0xe8c53a, 4, 4, 0.16);
+  for (const lat of [-9.6, 9.6]) solidLine(b, turn, L, lat, 0xdfe3e0, 0.2);
+  // Patched asphalt, mud and pine needles
+  for (let i = 0; i < 6; i++) {
+    b.frame = frameAt(rr(rng, 2, L - 2), rr(rng, -9, 9), turn, L);
+    b.box(rr(rng, 1.2, 2.6), 0.012, rr(rng, 1.2, 3), rpick(rng, [0x3a3c3e, 0x515356, 0x4a4036]), [0, 0.006, 0], { rot: [0, rng(), 0] });
+  }
+  b.frame = null;
+  for (const side of [-1, 1]) {
+    strip(b, turn, L, side * 10.0, side * 12.6, -0.02, 0.3, 0x6b5a40, segs);
+    strip(b, turn, L, side * 12.6, side * 90, -0.06, 0.3, GRASS[0], segs);
+  }
+  // Wooden guard rail
+  for (const side of [-1, 1]) {
+    for (let s = 2; s < L; s += 5) {
+      b.frame = frameAt(s, side * 12.9, turn, L, 0, -0.02);
+      b.box(0.22, 1.0, 0.22, 0x6e4b2c, [0, 0.5, 0]);
+      b.box(0.08, 0.12, 0.05, side > 0 ? 0xff5a2a : 0xffd23f, [-side * 0.12, 0.8, 0], { layer: 'glow' });
+    }
+    b.frame = null;
+    strip(b, turn, L, side * 12.8, side * 13.0, 0.85, 0.22, 0x7a5532, segs);
+  }
+  // Dense pines (near ones cast shadows, far ones go on the cheap layer)
+  for (let i = 0; i < 30; i++) {
+    const side = rng() < 0.5 ? -1 : 1;
+    const far = i >= 16;
+    b.defaultLayer = far ? 'far' : 'lit';
+    b.frame = frameAt(rr(rng, 0, L), side * (far ? rr(rng, 30, 80) : rr(rng, 14.5, 30)), turn, L, rng() * 6, -0.06);
+    pine(b, rng, far ? rr(rng, 1.2, 1.7) : rr(rng, 0.8, 1.2));
+  }
+  b.defaultLayer = 'lit';
+  for (let i = 0; i < 9; i++) {
+    const side = rng() < 0.5 ? -1 : 1;
+    b.frame = frameAt(rr(rng, 1, L - 1), side * rr(rng, 13.6, 26), turn, L, rng() * 6, -0.06);
+    const t = rng();
+    if (t < 0.35) b.ico(rr(rng, 0.4, 0.8), rpick(rng, [0x4f7a3a, 0x5b8a42, 0x3f6b33]), [0, 0.3, 0], { scale: [1.5, 0.6, 1.3] });
+    else if (t < 0.6) b.ico(rr(rng, 0.6, 1.3), rpick(rng, [0x7d8078, 0x6a6e66]), [0, 0.25, 0], { scale: [1.3, 0.7, 1] });
+    else if (t < 0.8) fallenLog(b, rng);
+    else {
+      b.cyl(0.45, 0.5, 0.6, 8, BARK, [0, 0.3, 0]);
+      b.cyl(0.42, 0.42, 0.04, 8, 0xc9a074, [0, 0.61, 0]);
+    }
+  }
+  if (variant === 0 && turn === 0) {
+    // Timber yard: stacked logs + sawmill shed
+    b.frame = frameAt(22, -19, turn, L, Math.PI / 2, -0.06);
+    for (let row = 0; row < 3; row++) {
+      for (let i = 0; i < 5 - row; i++) b.cyl(0.42, 0.42, 7, 8, row % 2 ? 0x6e4b2c : BARK, [-1.7 + i * 0.85 + row * 0.42, 0.42 + row * 0.74, 0], { rot: [Math.PI / 2, 0, 0] });
+    }
+    b.frame = frameAt(36, -22, turn, L, Math.PI / 2, -0.06);
+    b.box(9, 4, 6, 0x7a5a3a, [0, 2, 0]);
+    b.box(9.6, 0.3, 3.6, 0x5b3a2c, [0, 4.6, 1.6], { rot: [0.45, 0, 0] });
+    b.box(9.6, 0.3, 3.6, 0x5b3a2c, [0, 4.6, -1.6], { rot: [-0.45, 0, 0] });
+    b.box(3, 2.6, 0.08, 0x2b2622, [0, 1.3, -3.02]);
+    b.box(2.2, 0.6, 0.1, 0xe8c53a, [0, 3.4, -3.05], { layer: 'glow' });
+  } else if (variant === 1) {
+    // Ranger lookout tower
+    b.frame = frameAt(28, 20, turn, L, 0, -0.06);
+    for (const x of [-1.4, 1.4]) for (const z of [-1.4, 1.4]) b.box(0.25, 9, 0.25, 0x6e4b2c, [x, 4.5, z]);
+    b.box(4, 0.25, 4, 0x7a5532, [0, 9, 0]);
+    b.box(4, 1.1, 0.12, 0x7a5532, [0, 9.6, -2]);
+    b.box(4.4, 0.25, 4.4, 0x8a3a2a, [0, 11.2, 0]);
+    for (const x of [-1.9, 1.9]) for (const z of [-1.9, 1.9]) b.box(0.15, 2, 0.15, 0x6e4b2c, [x, 10.1, z]);
+    b.box(0.5, 0.3, 0.3, 0xffd27a, [0, 10.3, 0], { layer: 'glow' });
+  }
+  b.frame = null;
+}
+
+/** Distant pine ridges ringing the forest horizon (replaces the skyline in forest mode). */
+export function buildPineRing(seed = 31): THREE.Group {
+  const rng = mulberry32(seed);
+  const b = new GeoBuilder();
+  const count = 70;
+  for (let i = 0; i < count; i++) {
+    const a = (i / count) * Math.PI * 2 + rr(rng, -0.04, 0.04);
+    const r = rr(rng, 230, 300);
+    b.frame = new THREE.Matrix4().makeRotationY(-a).setPosition(Math.cos(a) * r, 0, Math.sin(a) * r);
+    b.ico(rr(rng, 30, 55), PINE[i % PINE.length], [0, -10, 0], { scale: [1.6, 0.55, 1] });
+    for (let k = 0; k < 3; k++) b.cone(rr(rng, 6, 10), rr(rng, 26, 46), 6, PINE[(i + k) % PINE.length], [rr(rng, -18, 18), rr(rng, 14, 26), rr(rng, -8, 8)]);
+  }
+  b.frame = null;
+  const group = new THREE.Group();
+  group.name = 'pine_ring';
+  const body = b.buildGeometry('lit');
+  if (body) group.add(new THREE.Mesh(body, SKYLINE_MATS.body));
+  return group;
+}
+
 /** Builds the visual template for a chunk in local space (start at origin, heading -Z). */
 export function buildChunkTemplate(kind: ChunkKind, seed: number): THREE.Group {
   const rng = mulberry32(seed);
@@ -728,6 +844,7 @@ export function buildChunkTemplate(kind: ChunkKind, seed: number): THREE.Group {
   const L = ROAD.chunkLength;
   if (kind === 'highway') coastalHighway(b, rng, L, seed % 3);
   else if (kind === 'desert' || kind === 'desertL' || kind === 'desertR') desertRoad(b, rng, chunkTurn(kind), L, seed % 3);
+  else if (kind === 'forest' || kind === 'forestL' || kind === 'forestR') forestRoad(b, rng, chunkTurn(kind), L, seed % 3);
   else cityStreet(b, rng, chunkTurn(kind), L);
   const g = b.build({ castShadow: true, receiveShadow: true });
   g.name = `chunk_${kind}`;

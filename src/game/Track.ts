@@ -73,7 +73,7 @@ export class Track {
   chunks: Chunk[] = [];
   private pool: Chunk[] = [];
   private templates = new Map<string, THREE.Object3D>();
-  private templateKeys: Record<ChunkKind, string[]> = { straight: [], curveL: [], curveR: [], highway: [], desert: [], desertL: [], desertR: [] };
+  private templateKeys: Record<ChunkKind, string[]> = { straight: [], curveL: [], curveR: [], highway: [], desert: [], desertL: [], desertR: [], forest: [], forestL: [], forestR: [] };
   private wallBody: RAPIER.RigidBody;
   biome: Biome = 'city';
   onChunkPlaced: ((c: Chunk, safe: boolean) => void) | null = null;
@@ -120,6 +120,9 @@ export class Track {
     [51, 52, 53].forEach((seed) => add('desert', `desert_${seed}`, buildChunkTemplate('desert', seed)));
     [61, 62].forEach((seed) => add('desertL', `desertL_${seed}`, buildChunkTemplate('desertL', seed)));
     [71, 72].forEach((seed) => add('desertR', `desertR_${seed}`, buildChunkTemplate('desertR', seed)));
+    [81, 82, 83].forEach((seed) => add('forest', `forest_${seed}`, buildChunkTemplate('forest', seed)));
+    [91, 92].forEach((seed) => add('forestL', `forestL_${seed}`, buildChunkTemplate('forestL', seed)));
+    [101, 102].forEach((seed) => add('forestR', `forestR_${seed}`, buildChunkTemplate('forestR', seed)));
   }
 
   reset(biome: Biome = 'city'): void {
@@ -134,7 +137,7 @@ export class Track {
     let startDist = -ROAD.chunkLength * ROAD.chunksBehind;
     for (let i = 0; i < this.pool.length; i++) {
       const c = this.pool[i];
-      const kind: ChunkKind = i < 5 ? (biome === 'desert' ? 'desert' : 'straight') : this.chooseKind(h0);
+      const kind: ChunkKind = i < 5 ? this.themed('straight') : this.chooseKind(h0);
       this.place(c, kind, p0, h0, startDist, i < 5);
       const end = new THREE.Vector3();
       const h = c.sample(c.L, 0, end);
@@ -172,13 +175,19 @@ export class Track {
     }
     this.lastKind = kind;
     this.curveRun = kind === 'straight' ? 0 : this.curveRun + 1;
+    return this.themed(kind);
+  }
+
+  /** Maps a generic straight/curve kind onto the current biome's chunk set. */
+  private themed(kind: ChunkKind): ChunkKind {
     if (this.biome === 'desert') return kind === 'curveL' ? 'desertL' : kind === 'curveR' ? 'desertR' : 'desert';
+    if (this.biome === 'forest') return kind === 'curveL' ? 'forestL' : kind === 'curveR' ? 'forestR' : 'forest';
     return kind;
   }
 
   private place(c: Chunk, kind: ChunkKind, p0: THREE.Vector3, h0: number, startDist: number, safe: boolean): void {
     c.kind = kind;
-    c.biome = kind === 'highway' ? 'coastal' : kind.startsWith('desert') ? 'desert' : 'city';
+    c.biome = kind === 'highway' ? 'coastal' : kind.startsWith('desert') ? 'desert' : kind.startsWith('forest') ? 'forest' : 'city';
     c.turn = chunkTurn(kind);
     c.p0.copy(p0);
     c.p0.y = 0;

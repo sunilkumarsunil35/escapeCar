@@ -1,15 +1,69 @@
 import * as THREE from 'three';
 import { RAPIER, type PhysicsWorld } from '../core/Physics';
 import { MAGNET_RADIUS, PICKUP_CASH_VALUE, POWERUPS, ROAD, type HeatDef, type PowerupId } from '../data/config';
-import { chance, clamp, pick, rand } from '../core/math';
+import { chance, clamp, damp, pick, rand } from '../core/math';
 import { glowMat } from '../core/Palette';
 import type { AssetRegistry } from '../assets/AssetRegistry';
-import { rampHullPoints } from '../assets/procedural/items';
+import { buildCraneGantry, buildCraneLoad, buildPothole, rampHullPoints } from '../assets/procedural/items';
 import type { Track, Chunk } from './Track';
 import type { GameCtx } from './types';
 import { audio } from '../core/Audio';
 
-type HazardKind = 'barricade' | 'barrel' | 'ramp' | 'cone' | 'roller';
+type HazardKind = 'barricade' | 'barrel' | 'ramp' | 'cone' | 'roller' | 'pothole';
+
+type GatePattern = 'single' | 'pair' | 'scissor';
+
+/** A logging gantry across the road whose hanging trees slide sideways (forest mode). */
+interface CraneGate {
+  active: boolean;
+  dist: number;
+  pattern: GatePattern;
+  t: number;
+  omega: number;
+  phase: number;
+  hitCd: number;
+  warned: boolean;
+  gantry: THREE.Group;
+  big: THREE.Group;
+  small: [THREE.Group, THREE.Group];
+  pos: THREE.Vector3;
+}
+
+/** Half of the drivable corridor the crane loads move in (forest chunks use the city wall). */
+const GATE_SPAN = ROAD.cityWall - 0.3;
+/** Half-thickness of a hanging tree along the road. */
+const LOAD_HALF_T = 0.9;
+/** Narrowest gap any pattern can ever leave (see loadsAt), checked by tools/playtest-bot.js. */
+export const MIN_GATE_GAP = 4.2;
+
+/**
+ * Lateral [center, halfWidth] of each hanging load at time t. Every pattern is built so a gap of at
+ * least MIN_GATE_GAP metres always exists somewhere across the road:
+ *  - single: one 11 m tree sweeping ±5 m → the wider side gap is never below 6.8 m.
+ *  - pair: two 6 m trees moving together with a fixed 5 m gap between them.
+ *  - scissor: two 6 m trees moving in opposite directions; the middle gap opens as the edge
+ *    gaps close and vice versa, crossing over at 4.2 m.
+ */
+function loadsAt(g: CraneGate, out: [number, number][]): number {
+  const s = Math.sin(g.t * g.omega + g.phase);
+  if (g.pattern === 'single') {
+    out[0][0] = 5.0 * s;
+    out[0][1] = 5.5;
+    return 1;
+  }
+  if (g.pattern === 'pair') {
+    const c = 3.8 * s;
+    out[0][0] = c - 5.5;
+    out[1][0] = c + 5.5;
+  } else {
+    const k = 2.5 * s;
+    out[0][0] = -5.5 + k;
+    out[1][0] = 5.5 - k;
+  }
+  out[0][1] = 3;
+  out[1][1] = 3;
+  return 2;
+}
 
 export interface Hazard {
   kind: HazardKind;
@@ -59,6 +113,12 @@ export class HazardManager {
   /** Road rollers lumber down the lanes (desert mode). */
   rollersEnabled = false;
   private rollerT = 0;
+  private potholes: Hazard[] = [];
+  private gates: CraneGate[] = [];
+  potholesEnabled = false;
+  cranesEnabled = false;
+  private loadTmp: [number, number][] = [[0, 0], [0, 0]];
+  private gateTmp = new THREE.Vector3();
   private cones: Hazard[] = [];
   /** Barricades + barrels, pre-joined so the per-frame loop allocates nothing. */
   private blockers: Hazard[] = [];
@@ -86,6 +146,22 @@ export class HazardManager {
     this.blockers = [...this.barricades, ...this.barrels, ...this.cones];
     const rc = assets.config('obstacle_roller').collider ?? [2.6, 3.1, 5.2];
     for (let i = 0; i < 4; i++) this.rollers.push(mk('roller', 'obstacle_roller', rc[0] / 2, rc[2] / 2));
+    for (let i = 0; i < 24; i++) {
+      const obj = buildPothole();
+      obj.visible = false;
+      this.root.add(obj);
+      this.potholes.push({ kind: 'pothole', obj, active: false, dist: 0, lat: 0, halfW: 1.25, halfL: 1.1, hp: 1, broken: 0, passed: false, fuse: 0, vel: new THREE.Vector3(), spin: new THREE.Vector3(), pos: new THREE.Vector3(), body: null });
+    }
+    for (let i = 0; i < 3; i++) {
+      const gantry = buildCraneGantry(ROAD.cityWall);
+      const big = buildCraneLoad(11);
+      const small: [THREE.Group, THREE.Group] = [buildCraneLoad(6), buildCraneLoad(6)];
+      for (const o of [gantry, big, ...small]) {
+        o.visible = false;
+        this.root.add(o);
+      }
+      this.gates.push({ active: false, dist: 0, pattern: 'single', t: 0, omega: 1.5, phase: 0, hitCd: 0, warned: false, gantry, big, small, pos: new THREE.Vector3() });
+    }
     for (let i = 0; i < 8; i++) {
       const h = mk('ramp', 'obstacle_ramp', 2, 3);
       h.body = physics.world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, -60, 0));
@@ -123,7 +199,8 @@ export class HazardManager {
   }
 
   reset(): void {
-    for (const h of [...this.barricades, ...this.barrels, ...this.ramps, ...this.cones, ...this.rollers]) this.deactivate(h);
+    for (const h of [...this.barricades, ...this.barrels, ...this.ramps, ...this.cones, ...this.rollers, ...this.potholes]) this.deactivate(h);
+    for (const g of this.gates) this.hideGate(g);
     for (const p of [...this.cash, ...this.powerups]) this.hidePickup(p);
   }
 
@@ -225,6 +302,18 @@ export class HazardManager {
       const r = this.placeHazard(this.rollers, c.startDist + rand(10, 40), pick(ROAD.lanes));
       if (r) r.obj.rotation.y += Math.PI;
     }
+    if (!safe && this.cranesEnabled && c.startDist > 250 && Math.random() < 0.42 && this.placeGate(c.startDist + 25)) {
+      // A crane gets the chunk to itself so nothing else can plug its gaps.
+      return;
+    }
+    if (!safe && this.potholesEnabled && c.startDist > 150) {
+      const n = 1 + Math.floor(Math.random() * 3);
+      const lanes = [...ROAD.lanes].sort(() => Math.random() - 0.5);
+      for (let i = 0; i < n; i++) {
+        const h = this.placeHazard(this.potholes, c.startDist + 6 + i * 14 + rand(0, 6), lanes[i] + rand(-1, 1));
+        if (h) h.obj.rotation.y += rand(0, Math.PI);
+      }
+    }
     if (safe) {
       if (c.index >= 2) for (let i = 0; i < 4; i++) this.placeCash(c.startDist + 15 + i * 5, 2.5);
       return;
@@ -303,6 +392,158 @@ export class HazardManager {
     this.placeCash(s0 + 45, first * 2.5);
   }
 
+  private placeGate(dist: number): boolean {
+    const g = this.gates.find((x) => !x.active);
+    if (!g) return false;
+    const lvl = this.heat?.level ?? 1;
+    g.active = true;
+    g.dist = dist;
+    g.pattern = pick<GatePattern>(['single', 'pair', 'scissor']);
+    g.t = 0;
+    g.omega = rand(1.25, 1.75) * (1 + 0.07 * (lvl - 1));
+    g.phase = rand(0, Math.PI * 2);
+    g.hitCd = 0;
+    g.warned = false;
+    g.gantry.visible = true;
+    g.big.visible = g.pattern === 'single';
+    for (const o of g.small) o.visible = g.pattern !== 'single';
+    return true;
+  }
+
+  private hideGate(g: CraneGate): void {
+    g.active = false;
+    g.gantry.visible = false;
+    g.big.visible = false;
+    for (const o of g.small) o.visible = false;
+  }
+
+  /** Free intervals across the road for a gate `ahead` seconds from now. */
+  gateGaps(g: CraneGate, ahead: number): [number, number][] {
+    const t0 = g.t;
+    g.t += ahead;
+    const n = loadsAt(g, this.loadTmp);
+    g.t = t0;
+    const loads = this.loadTmp.slice(0, n).map(([c, hw]) => [c - hw, c + hw] as [number, number]).sort((a, b) => a[0] - b[0]);
+    const gaps: [number, number][] = [];
+    let cursor = -GATE_SPAN;
+    for (const [a, b] of loads) {
+      if (a > cursor) gaps.push([cursor, a]);
+      cursor = Math.max(cursor, b);
+    }
+    if (cursor < GATE_SPAN) gaps.push([cursor, GATE_SPAN]);
+    return gaps;
+  }
+
+  /** Steering target inside the widest reachable gap, or null when already safely inside one. */
+  private gateGapTarget(g: CraneGate, lat: number, ahead: number): number | null {
+    const gaps = this.gateGaps(g, ahead).filter(([a, b]) => b - a > 3.4);
+    if (!gaps.length) return null;
+    let best = gaps[0];
+    let bestScore = Infinity;
+    for (const gp of gaps) {
+      const mid = (gp[0] + gp[1]) / 2;
+      const score = Math.abs(mid - lat) - (gp[1] - gp[0]) * 0.6;
+      if (score < bestScore) {
+        bestScore = score;
+        best = gp;
+      }
+    }
+    return (best[0] + best[1]) / 2;
+  }
+
+  /** Read-only view of active crane gates for tooling (gap verification). */
+  get gateList(): readonly CraneGate[] {
+    return this.gates;
+  }
+
+  /**
+   * Forest crane gates: hanging trees slide across the road on a gantry. A tree hit costs a big
+   * chunk of HP and most of your speed; chasers and traffic get swatted aside.
+   */
+  private updateGates(dt: number, ctx: GameCtx): void {
+    const p = ctx.player;
+    for (const g of this.gates) {
+      if (!g.active) continue;
+      if (g.dist < p.dist - 50 || g.dist < this.track.backDist + 2) {
+        this.hideGate(g);
+        continue;
+      }
+      const prevS = Math.sin(g.t * g.omega + g.phase);
+      g.t += dt;
+      g.hitCd = Math.max(0, g.hitCd - dt);
+      const heading = this.track.sample(g.dist, 0, g.pos);
+      g.gantry.position.set(g.pos.x, 0, g.pos.z);
+      g.gantry.rotation.set(0, heading, 0);
+      const lamps = g.gantry.getObjectByName('lamps');
+      if (lamps) lamps.visible = Math.sin(g.t * 8) > 0;
+      const n = loadsAt(g, this.loadTmp);
+      const sway = (Math.sin(g.t * g.omega + g.phase) - prevS) / Math.max(dt, 1e-4);
+      const objs = g.pattern === 'single' ? [g.big] : g.small;
+      for (let i = 0; i < n; i++) {
+        const [c, hw] = this.loadTmp[i];
+        const o = objs[i];
+        this.track.sample(g.dist, c, this.gateTmp);
+        o.position.set(this.gateTmp.x, 0, this.gateTmp.z);
+        o.rotation.set(0, heading, 0);
+        const swing = o.getObjectByName('swing');
+        const dir = g.pattern === 'scissor' && i === 0 ? 1 : g.pattern === 'scissor' ? -1 : 1;
+        if (swing) swing.rotation.z = damp(swing.rotation.z, -sway * dir * 0.05, 4, dt);
+        // Player
+        if (!p.dead && g.hitCd <= 0 && p.renderPos.y < 3.6 && Math.abs(g.dist - p.dist) < LOAD_HALF_T + p.halfLength * 0.85 && Math.abs(c - p.lat) < hw + p.halfWidth - 0.25) {
+          g.hitCd = 1.4;
+          ctx.damagePlayer(40, 0.9);
+          ctx.feedback('large', this.gateTmp.clone().setY(1.8));
+          p.vF *= 0.35;
+          const lv = p.body.linvel();
+          p.body.setLinvel({ x: lv.x * 0.35, y: lv.y, z: lv.z * 0.35 }, true);
+          for (let k = 0; k < 10; k++) ctx.fx.puff(p.renderPos.clone().setY(1.8), new THREE.Vector3(rand(-4, 4), rand(1, 4), rand(-4, 4)), 0.5, 0.9, k % 2 ? 0x3d7340 : 0x6e4b2c);
+          ctx.toast('TIMBER! −40 HP', 'warn');
+          audio.hit();
+        }
+        // Chasers
+        for (const e of ctx.enemies.list) {
+          if (e.alive && Math.abs(g.dist - e.dist) < LOAD_HALF_T + e.def.halfL && Math.abs(c - e.lat) < hw + e.def.halfW) ctx.enemies.damage(e, 260 * dt, ctx);
+        }
+        // Traffic gets swatted out of the way so it can never plug a gap
+        for (const cv of ctx.ambient.civList) {
+          if (cv.active && cv.smashed <= 0 && Math.abs(g.dist - cv.dist) < LOAD_HALF_T + 2.2 && Math.abs(c - cv.lat) < hw + 1.0) {
+            this.track.sample(cv.dist, cv.lat, this.gateTmp);
+            ctx.ambient.blast(this.gateTmp, 1.5);
+          }
+        }
+      }
+      const ahead = g.dist - p.dist;
+      if (!g.warned && ahead > 0 && ahead < 130 && !p.dead) {
+        g.warned = true;
+        ctx.toast('⚠ CRANE AHEAD — FIND THE GAP!', 'warn');
+        audio.warning();
+      }
+    }
+  }
+
+  /** Potholes jolt the car: damage, lost speed and a hop. Jump over them to stay clean. */
+  private updatePotholes(ctx: GameCtx, playerLow: boolean): void {
+    const p = ctx.player;
+    for (const h of this.potholes) {
+      if (!h.active) continue;
+      if (h.dist < p.dist - 40) {
+        this.deactivate(h);
+        continue;
+      }
+      if (h.passed || p.dead || !playerLow) continue;
+      if (Math.abs(h.dist - p.dist) < h.halfL + p.halfLength * 0.6 && Math.abs(h.lat - p.lat) < h.halfW + p.halfWidth - 0.35) {
+        h.passed = true;
+        ctx.damagePlayer(7, 0.4);
+        p.vF *= 0.72;
+        const lv = p.body.linvel();
+        p.body.setLinvel({ x: lv.x * 0.72, y: Math.max(lv.y, 0) + 3, z: lv.z * 0.72 }, true);
+        ctx.fx.puff(p.renderPos.clone().setY(0.3), new THREE.Vector3(0, 1.5, 0), 0.6, 0.6, 0x55524c);
+        ctx.toast('POTHOLE! −7 HP');
+        audio.hop();
+      }
+    }
+  }
+
   /**
    * Road rollers drive toward the player at walking pace with a spinning drum and a blinking
    * beacon. Touching one (unless airborne over it) flattens the car — instant game over.
@@ -343,6 +584,14 @@ export class HazardManager {
 
   /** Steering hint for AI: returns a lateral target that avoids blockers ahead, or null. */
   avoidLat(dist: number, lat: number, look: number): number | null {
+    // Crane gates: aim for the gap that will be open when we arrive (~31 m/s).
+    for (const g of this.gates) {
+      if (!g.active) continue;
+      const dd = g.dist - dist;
+      if (dd < -LOAD_HALF_T - 2 || dd > look + 45) continue;
+      const target = this.gateGapTarget(g, lat, Math.max(0, dd) / 31);
+      if (target !== null) return target;
+    }
     for (const h of this.rollers) {
       if (!h.active) continue;
       const dd = h.dist - dist;
@@ -374,6 +623,11 @@ export class HazardManager {
         if (half - cursor > 0.4) gaps.push((cursor + half) / 2);
         if (gaps.length) return gaps.reduce((best, g) => (Math.abs(g - lat) < Math.abs(best - lat) ? g : best));
       }
+    }
+    for (const h of this.potholes) {
+      if (!h.active || h.passed) continue;
+      const dd = h.dist - dist;
+      if (dd > 0 && dd < look && Math.abs(h.lat - lat) < h.halfW + 1.3) return h.lat + (h.lat > lat ? -1 : 1) * (h.halfW + 1.8);
     }
     for (const h of this.cones) {
       if (!h.active || h.broken > 0) continue;
@@ -552,6 +806,8 @@ export class HazardManager {
       }
     }
     this.updateRollers(dt, ctx, playerLow);
+    this.updateGates(dt, ctx);
+    this.updatePotholes(ctx, playerLow);
     for (const r of this.ramps) {
       if (r.active && r.dist < p.dist - 40) this.deactivate(r);
     }

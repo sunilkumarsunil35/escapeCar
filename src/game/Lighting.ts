@@ -16,6 +16,7 @@ const SKYLINE: Record<PresetId, SkylineLook> = {
   preset_sunset: { color: 0x7a4a3a, emissive: 0x6b3a2a, windows: 0x8a5a20 },
   preset_night: { color: 0x0b1020, emissive: 0x111a30, windows: 0xffc860 },
   preset_desert: { color: 0xc99a74, emissive: 0xb88a62, windows: 0x000000 },
+  preset_forest: { color: 0x3a5a42, emissive: 0x2c4a35, windows: 0x000000 },
 };
 
 interface Snapshot {
