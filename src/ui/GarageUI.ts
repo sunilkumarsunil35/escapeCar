@@ -1,7 +1,6 @@
 import {
   CARS, CAR_ORDER, GADGETS, GADGET_ORDER, PAINTS, PAINT_PRICE, UPGRADES, WEAPONS, WEAPON_ORDER, paintColor,
-  type CarId, type GadgetId, type PaintId, type UpgradeCategory, type WeaponId,
-} from '../data/config';
+  type CarId, type GadgetId, type PaintId, type UpgradeCategory, type WeaponId, MODES } from '../data/config';
 import { formatCash, formatTime } from '../core/math';
 import type { SaveStore } from '../core/Save';
 import { computeStats, loadoutFromSave, type Loadout } from '../game/Loadout';
@@ -73,6 +72,7 @@ export class GarageUI {
         <div class="g-actions">
           <div class="g-detail"></div>
           <button class="g-buy"></button>
+          <button class="g-mode" title="Switch location"></button>
           <button class="g-play">ESCAPE <span>›››</span></button>
         </div>
       </div>`;
@@ -90,6 +90,13 @@ export class GarageUI {
       this.onPair?.();
     });
     q('.g-buy').addEventListener('click', () => this.buyOrEquip());
+    q('.g-mode').addEventListener('click', () => {
+      audio.unlock();
+      audio.click();
+      this.save.data.mode = this.save.data.mode === 'desert' ? 'city' : 'desert';
+      this.save.save();
+      this.refresh();
+    });
     q('.g-settings').addEventListener('click', () => {
       audio.unlock();
       this.onSettings?.();
@@ -241,7 +248,11 @@ export class GarageUI {
   refresh(): void {
     const d = this.save.data;
     (this.el.querySelector('.g-cash') as HTMLElement).textContent = formatCash(d.cash);
-    (this.el.querySelector('.g-best') as HTMLElement).textContent = formatTime(d.bestTime);
+    (this.el.querySelector('.g-best') as HTMLElement).textContent = formatTime(d.bestTimes[d.mode] ?? 0);
+    const mode = MODES[d.mode];
+    const modeBtn = this.el.querySelector('.g-mode') as HTMLElement;
+    modeBtn.classList.toggle('desert', d.mode === 'desert');
+    modeBtn.innerHTML = `<small>LOCATION ⇄</small>${d.mode === 'desert' ? '🏜' : '🏙'} ${mode.name.toUpperCase()}<em>${mode.tagline}</em>`;
     (this.el.querySelector('.g-pair') as HTMLElement).textContent = this.pairedLabel();
     (this.el.querySelector('.g-mute') as HTMLElement).textContent = d.muted ? '🔇' : '🔊';
     this.el.querySelectorAll<HTMLButtonElement>('.g-tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === this.tab));

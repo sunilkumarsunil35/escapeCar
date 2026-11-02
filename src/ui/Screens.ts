@@ -43,7 +43,7 @@ export class WreckedScreen {
 
   show(r: RunResult, opts: { newBest: boolean; upgradeDot: boolean; name: string; global: boolean }): void {
     (this.el.querySelector('.w-sub') as HTMLElement).innerHTML =
-      `SURVIVED: <b>${formatTime(r.time)}</b> &nbsp;|&nbsp; MAX HEAT: <b class="stars">${stars(r.maxHeat)}</b>${opts.newBest ? ' &nbsp;<em>NEW BEST!</em>' : ''}`;
+      `${r.squashed ? '<b class="squash">FLATTENED BY A ROAD ROLLER</b><br>' : ''}SURVIVED: <b>${formatTime(r.time)}</b> &nbsp;|&nbsp; MAX HEAT: <b class="stars">${stars(r.maxHeat)}</b>${opts.newBest ? ' &nbsp;<em>NEW BEST!</em>' : ''}`;
     (this.el.querySelector('.w-earn') as HTMLElement).innerHTML = `
       <h3>RUN EARNINGS</h3>
       <div><span>Distance Bonus (${Math.round(r.distance)} m)</span><b>+${formatCash(r.distanceBonus)}</b></div>
@@ -52,6 +52,7 @@ export class WreckedScreen {
       <div><span>Near-Miss Bonus</span><b>+${formatCash(r.nearMissCash)}</b></div>
       <div><span>Objectives (${r.objectivesDone})</span><b>+${formatCash(r.objectiveCash)}</b></div>
       <div><span>Combo Payouts (best x${r.bestCombo.toFixed(1)})</span><b>+${formatCash(r.comboCash)}</b></div>
+      ${r.modeBonus > 0 ? `<div class="bonus"><span>Desert Bonus (x1.5)</span><b>+${formatCash(r.modeBonus)}</b></div>` : ''}
       <div class="total"><span>TOTAL EARNED</span><b>+${formatCash(r.total)}</b></div>
       <div class="score"><span>Score</span><b>${r.score.toLocaleString('en-US')}</b></div>`;
     (this.el.querySelector('.w-board-title') as HTMLElement).textContent = opts.global ? 'GLOBAL LEADERBOARD' : 'LOCAL LEADERBOARD';

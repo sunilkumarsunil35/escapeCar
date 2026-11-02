@@ -6,7 +6,7 @@ import type { EnemyManager, Enemy } from './Enemies';
 import type { HazardManager } from './Hazards';
 import type { Combat } from './Combat';
 import type { Ambient } from './Ambient';
-import type { HeatDef, PowerupId } from '../data/config';
+import type { HeatDef, ModeDef, PowerupId } from '../data/config';
 import type { GameEvent } from './Objectives';
 
 export type FeedbackTier = 'small' | 'blast' | 'medium' | 'large';
@@ -22,12 +22,15 @@ export interface GameCtx {
   ambient: Ambient;
   camera: THREE.PerspectiveCamera;
   heat: HeatDef;
+  mode: ModeDef;
   time: number;
   damagePlayer(amount: number, shake?: number): void;
   onEnemyKilled(e: Enemy): void;
   collectCash(value: number): void;
   applyPowerup(id: PowerupId): void;
   nearMiss(): void;
+  /** Run over by a road roller: flattened car, instant game over. */
+  squashPlayer(): void;
   reportEvent(type: GameEvent, amount?: number): void;
   shake(amount: number): void;
   /** Layered juice scaled by importance: shake + hit-stop + flash (game-feel tiers). */

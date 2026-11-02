@@ -170,6 +170,11 @@ export class Ambient {
     const chunk = ctx.track.chunkAt(dist);
     let lat: number;
     let y: number;
+    if (chunk.biome === 'desert') {
+      ped.active = false;
+      ped.obj.visible = false;
+      return;
+    }
     if (chunk.kind === 'highway') {
       if (chance(0.6)) {
         lat = rand(14, 26);

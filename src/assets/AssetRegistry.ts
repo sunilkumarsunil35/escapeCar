@@ -7,7 +7,7 @@ import {
   buildSedan, buildTuner, buildTruck, buildBike, buildChopper, buildOilPuddle, buildMine, buildDozer, type WheelStyle,
 } from './procedural/vehicles';
 import {
-  buildTommy, buildRocketPod, buildMissile, buildCash, buildWrench, buildNitro, buildMagnet, buildBarricade, buildBarrel, buildRamp, buildCone,
+  buildTommy, buildRocketPod, buildMissile, buildCash, buildWrench, buildNitro, buildMagnet, buildBarricade, buildBarrel, buildRamp, buildCone, buildRoadRoller,
 } from './procedural/items';
 import { buildChunkTemplate, buildGarage } from './procedural/environment';
 import { buildCivilian, buildPedestrian, TAXI_YELLOW } from './procedural/ambient';
@@ -73,6 +73,7 @@ export const DEFAULT_MANIFEST: Manifest = {
     obstacle_barrel: { url: null, scale: 1, rotationY: 0, collider: [0.8, 1.2, 0.8] },
     obstacle_ramp: { url: null, scale: 1, rotationY: 0, collider: [4.0, 1.6, 6.0] },
     obstacle_cone: { url: null, scale: 1, rotationY: 0, collider: [0.6, 0.9, 0.6] },
+    obstacle_roller: { url: null, scale: 1, rotationY: 0, collider: [2.6, 3.1, 5.2] },
     env_garage: { url: null, scale: 1, rotationY: 0, sockets: { turntable_center: [0, 0, 0] } },
     traffic_civilian: {
       url: null, scale: 1, rotationY: 0, collider: [2.0, 0.8, 4.2],
@@ -284,6 +285,8 @@ export class AssetRegistry {
         return buildBarrel();
       case 'obstacle_ramp':
         return buildRamp();
+      case 'obstacle_roller':
+        return buildRoadRoller();
       case 'obstacle_cone':
         return buildCone();
       case 'road_straight':

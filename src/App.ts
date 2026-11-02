@@ -342,7 +342,7 @@ ${info.render.calls} draws  ${Math.round(info.render.triangles / 1000)}k tris`;
     this.garageUI.show(false);
     this.garage.active = false;
     this.mode = 'run';
-    this.game.start(loadoutFromSave(this.save.data));
+    this.game.start(loadoutFromSave(this.save.data), this.save.data.mode);
   }
 
   private togglePause(): void {
@@ -358,8 +358,9 @@ ${info.render.calls} draws  ${Math.round(info.render.triangles / 1000)}k tris`;
 
   private onWrecked(r: RunResult): void {
     const d = this.save.data;
-    const newBest = r.time > d.bestTime;
+    const newBest = r.time > (d.bestTimes[r.mode] ?? 0);
     d.cash += r.total;
+    d.bestTimes[r.mode] = Math.max(d.bestTimes[r.mode] ?? 0, r.time);
     d.bestTime = Math.max(d.bestTime, r.time);
     d.bestScore = Math.max(d.bestScore, r.score);
     d.totalRuns++;

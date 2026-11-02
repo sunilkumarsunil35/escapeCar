@@ -73,7 +73,7 @@ export class Track {
   chunks: Chunk[] = [];
   private pool: Chunk[] = [];
   private templates = new Map<string, THREE.Object3D>();
-  private templateKeys: Record<ChunkKind, string[]> = { straight: [], curveL: [], curveR: [], highway: [] };
+  private templateKeys: Record<ChunkKind, string[]> = { straight: [], curveL: [], curveR: [], highway: [], desert: [], desertL: [], desertR: [] };
   private wallBody: RAPIER.RigidBody;
   biome: Biome = 'city';
   onChunkPlaced: ((c: Chunk, safe: boolean) => void) | null = null;
@@ -117,21 +117,24 @@ export class Track {
     }
     if (assets.hasModel('road_highway')) add('highway', 'highway_glb', assets.instantiate('road_highway'));
     else [41, 42, 43].forEach((seed) => add('highway', `highway_${seed}`, buildChunkTemplate('highway', seed)));
+    [51, 52, 53].forEach((seed) => add('desert', `desert_${seed}`, buildChunkTemplate('desert', seed)));
+    [61, 62].forEach((seed) => add('desertL', `desertL_${seed}`, buildChunkTemplate('desertL', seed)));
+    [71, 72].forEach((seed) => add('desertR', `desertR_${seed}`, buildChunkTemplate('desertR', seed)));
   }
 
-  reset(): void {
+  reset(biome: Biome = 'city'): void {
     for (const c of this.chunks) this.clearColliders(c);
     this.chunks = [];
     this.placedCount = 0;
     this.lastKind = 'straight';
     this.curveRun = 0;
-    this.biome = 'city';
+    this.biome = biome;
     let p0 = new THREE.Vector3(0, 0, ROAD.chunkLength * ROAD.chunksBehind);
     let h0 = 0;
     let startDist = -ROAD.chunkLength * ROAD.chunksBehind;
     for (let i = 0; i < this.pool.length; i++) {
       const c = this.pool[i];
-      const kind: ChunkKind = i < 5 ? 'straight' : this.chooseKind(h0);
+      const kind: ChunkKind = i < 5 ? (biome === 'desert' ? 'desert' : 'straight') : this.chooseKind(h0);
       this.place(c, kind, p0, h0, startDist, i < 5);
       const end = new THREE.Vector3();
       const h = c.sample(c.L, 0, end);
@@ -169,12 +172,13 @@ export class Track {
     }
     this.lastKind = kind;
     this.curveRun = kind === 'straight' ? 0 : this.curveRun + 1;
+    if (this.biome === 'desert') return kind === 'curveL' ? 'desertL' : kind === 'curveR' ? 'desertR' : 'desert';
     return kind;
   }
 
   private place(c: Chunk, kind: ChunkKind, p0: THREE.Vector3, h0: number, startDist: number, safe: boolean): void {
     c.kind = kind;
-    c.biome = kind === 'highway' ? 'coastal' : 'city';
+    c.biome = kind === 'highway' ? 'coastal' : kind.startsWith('desert') ? 'desert' : 'city';
     c.turn = chunkTurn(kind);
     c.p0.copy(p0);
     c.p0.y = 0;

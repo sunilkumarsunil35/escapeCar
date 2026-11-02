@@ -11,9 +11,13 @@ export class Director {
   private chopperT = 0;
   onHeatChange: ((h: HeatDef) => void) | null = null;
 
-  reset(): void {
+  /** Heat table for the current mode (see heatLevelsFor). */
+  levels: HeatDef[] = HEAT_LEVELS;
+
+  reset(levels: HeatDef[] = HEAT_LEVELS): void {
+    this.levels = levels;
     this.time = 0;
-    this.heat = HEAT_LEVELS[0];
+    this.heat = levels[0];
     this.maxHeat = 1;
     this.spawnT = 2.5;
     this.chopperT = 3;
@@ -21,14 +25,14 @@ export class Director {
 
   /** Debug helper (admin/dev): jump straight to a heat level. */
   skipTo(level: number): void {
-    const h = HEAT_LEVELS[Math.max(0, Math.min(3, level - 1))];
+    const h = this.levels[Math.max(0, Math.min(3, level - 1))];
     this.time = Math.max(this.time, h.start + 0.01);
   }
 
   update(dt: number, ctx: GameCtx): void {
     this.time += dt;
-    let next = HEAT_LEVELS[0];
-    for (const h of HEAT_LEVELS) if (this.time >= h.start) next = h;
+    let next = this.levels[0];
+    for (const h of this.levels) if (this.time >= h.start) next = h;
     if (next !== this.heat) {
       this.heat = next;
       this.maxHeat = Math.max(this.maxHeat, next.level);
@@ -38,7 +42,7 @@ export class Director {
 
     this.spawnT -= dt;
     if (this.spawnT <= 0) {
-      this.spawnT = rand(1.2, 2.4) * (1.15 - this.heat.level * 0.1);
+      this.spawnT = rand(1.2, 2.4) * (1.15 - this.heat.level * 0.1) * ctx.mode.spawnIntervalMult;
       const free = this.heat.maxEnemies - ctx.enemies.activeCount;
       if (free > 0) {
         const kinds = this.heat.kinds;

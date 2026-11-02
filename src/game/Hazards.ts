@@ -9,7 +9,7 @@ import type { Track, Chunk } from './Track';
 import type { GameCtx } from './types';
 import { audio } from '../core/Audio';
 
-type HazardKind = 'barricade' | 'barrel' | 'ramp' | 'cone';
+type HazardKind = 'barricade' | 'barrel' | 'ramp' | 'cone' | 'roller';
 
 export interface Hazard {
   kind: HazardKind;
@@ -55,6 +55,10 @@ export class HazardManager {
     return this.barrels;
   }
   private ramps: Hazard[] = [];
+  private rollers: Hazard[] = [];
+  /** Road rollers lumber down the lanes (desert mode). */
+  rollersEnabled = false;
+  private rollerT = 0;
   private cones: Hazard[] = [];
   /** Barricades + barrels, pre-joined so the per-frame loop allocates nothing. */
   private blockers: Hazard[] = [];
@@ -80,6 +84,8 @@ export class HazardManager {
     const cc = assets.config('obstacle_cone').collider ?? [0.6, 0.9, 0.6];
     for (let i = 0; i < 44; i++) this.cones.push(mk('cone', 'obstacle_cone', cc[0] / 2, cc[2] / 2));
     this.blockers = [...this.barricades, ...this.barrels, ...this.cones];
+    const rc = assets.config('obstacle_roller').collider ?? [2.6, 3.1, 5.2];
+    for (let i = 0; i < 4; i++) this.rollers.push(mk('roller', 'obstacle_roller', rc[0] / 2, rc[2] / 2));
     for (let i = 0; i < 8; i++) {
       const h = mk('ramp', 'obstacle_ramp', 2, 3);
       h.body = physics.world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(0, -60, 0));
@@ -117,7 +123,7 @@ export class HazardManager {
   }
 
   reset(): void {
-    for (const h of [...this.barricades, ...this.barrels, ...this.ramps, ...this.cones]) this.deactivate(h);
+    for (const h of [...this.barricades, ...this.barrels, ...this.ramps, ...this.cones, ...this.rollers]) this.deactivate(h);
     for (const p of [...this.cash, ...this.powerups]) this.hidePickup(p);
   }
 
@@ -214,6 +220,11 @@ export class HazardManager {
 
   /** Populates a freshly recycled road chunk with hazards & pickups for the current heat. */
   populate(c: Chunk, safe: boolean): void {
+    // Road rollers trundle toward the player in a random lane (any chunk, including curves).
+    if (!safe && this.rollersEnabled && c.startDist > 350 && Math.random() < 0.25) {
+      const r = this.placeHazard(this.rollers, c.startDist + rand(10, 40), pick(ROAD.lanes));
+      if (r) r.obj.rotation.y += Math.PI;
+    }
     if (safe) {
       if (c.index >= 2) for (let i = 0; i < 4; i++) this.placeCash(c.startDist + 15 + i * 5, 2.5);
       return;
@@ -292,8 +303,52 @@ export class HazardManager {
     this.placeCash(s0 + 45, first * 2.5);
   }
 
+  /**
+   * Road rollers drive toward the player at walking pace with a spinning drum and a blinking
+   * beacon. Touching one (unless airborne over it) flattens the car — instant game over.
+   * Chasers that hit one are flattened too.
+   */
+  private updateRollers(dt: number, ctx: GameCtx, playerLow: boolean): void {
+    const p = ctx.player;
+    this.rollerT += dt;
+    for (const h of this.rollers) {
+      if (!h.active) continue;
+      if (h.dist < p.dist - 40 || h.dist < this.track.backDist + 2) {
+        this.deactivate(h);
+        continue;
+      }
+      if (!p.dead) h.dist -= 3.2 * dt;
+      const heading = this.track.sample(h.dist, h.lat, h.pos);
+      h.pos.y = 0;
+      h.obj.position.copy(h.pos);
+      h.obj.rotation.set(0, heading + Math.PI, 0);
+      const drum = h.obj.getObjectByName('drum');
+      if (drum && !p.dead) drum.rotation.x -= (3.2 / 0.85) * dt;
+      const beacon = h.obj.getObjectByName('beacon');
+      if (beacon) beacon.visible = Math.sin(this.rollerT * 9 + h.dist) > -0.2;
+      const ahead = h.dist - p.dist;
+      if (h.passed === false && ahead > 0 && ahead < 110 && !p.dead) {
+        h.passed = true;
+        ctx.toast('⚠ ROAD ROLLER AHEAD!', 'warn');
+        audio.warning();
+      }
+      if (!p.dead && playerLow && Math.abs(h.dist - p.dist) < h.halfL + p.halfLength * 0.8 && Math.abs(h.lat - p.lat) < h.halfW + p.halfWidth - 0.35) {
+        ctx.squashPlayer();
+      }
+      for (const e of ctx.enemies.list) {
+        if (e.alive && Math.abs(h.dist - e.dist) < h.halfL + e.def.halfL && Math.abs(h.lat - e.lat) < h.halfW + e.def.halfW) ctx.enemies.kill(e, ctx);
+      }
+    }
+  }
+
   /** Steering hint for AI: returns a lateral target that avoids blockers ahead, or null. */
   avoidLat(dist: number, lat: number, look: number): number | null {
+    for (const h of this.rollers) {
+      if (!h.active) continue;
+      const dd = h.dist - dist;
+      // Rollers are slow and huge: plan the dodge early, always toward the side with more road.
+      if (dd > -h.halfL && dd < look + 50 && Math.abs(h.lat - lat) < h.halfW + 3.4) return h.lat + (h.lat > 0 ? -1 : 1) * (h.halfW + 3.2);
+    }
     // Barricade rows: steer for the actual gap instead of dodging one piece into its neighbour.
     let rowDist = Infinity;
     for (const h of this.barricades) {
@@ -496,6 +551,7 @@ export class HazardManager {
         }
       }
     }
+    this.updateRollers(dt, ctx, playerLow);
     for (const r of this.ramps) {
       if (r.active && r.dist < p.dist - 40) this.deactivate(r);
     }

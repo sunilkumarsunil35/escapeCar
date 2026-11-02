@@ -410,6 +410,14 @@ class AudioSynth {
     this.chime(scaleNote(4), 0.6, 0.08, { delay: 0.09 });
     this.chime(scaleNote(7), 0.9, 0.08, { delay: 0.18 });
   }
+  /** Metal crunch for being flattened by a road roller. */
+  squash(): void {
+    this.duckMusic(0.15, 1.6);
+    this.noise(0.5, 260, 0.9, 'lowpass');
+    this.noise(0.25, 1800, 0.35, 'bandpass', 2);
+    this.tone(180, 45, 0.6, 0.35, 'square');
+  }
+
   wreck(): void {
     this.duckMusic(0.15, 1.8);
     this.explosion(true);

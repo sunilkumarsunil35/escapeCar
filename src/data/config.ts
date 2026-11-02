@@ -6,8 +6,8 @@ export type GadgetId = 'gadget_mine' | 'gadget_oil';
 export type EnemyKind = 'enemy_bike' | 'enemy_sedan' | 'enemy_chopper';
 export type PowerupId = 'powerup_wrench' | 'powerup_nitro' | 'powerup_magnet';
 export type UpgradeCategory = 'engine' | 'tires' | 'armor';
-export type PresetId = 'preset_morning' | 'preset_midday' | 'preset_sunset' | 'preset_night';
-export type Biome = 'city' | 'coastal';
+export type PresetId = 'preset_morning' | 'preset_midday' | 'preset_sunset' | 'preset_night' | 'preset_desert';
+export type Biome = 'city' | 'coastal' | 'desert';
 
 export interface CarDef {
   id: CarId;
@@ -230,6 +230,11 @@ export const LIGHTING_PRESETS: Record<PresetId, LightingPreset> = {
     hemiSky: 0xffc58a, hemiGround: 0x5a2d1e, hemiInt: 0.55, fogNear: 50, fogFar: 430, bloom: 0.35, bloomThreshold: 0.85,
     windowTint: 0xd9a35c, nightFx: 0.45, headlights: 0.5, exposure: 1.0,
   },
+  preset_desert: {
+    sky: 0x3d8fd6, fog: 0xe6cc9c, amb: 0xfff1d6, ambInt: 1.0, sun: 0xfff4e0, sunInt: 2.8, sunPos: [25, 70, 15],
+    hemiSky: 0xcfe6ff, hemiGround: 0xc29a5e, hemiInt: 0.6, fogNear: 70, fogFar: 500, bloom: 0.22, bloomThreshold: 0.92,
+    windowTint: 0x6b86a3, nightFx: 0, headlights: 0, exposure: 1.0,
+  },
   preset_night: {
     sky: 0x0f172a, fog: 0x1e293b, amb: 0x334155, ambInt: 0.5, sun: 0x64748b, sunInt: 0.8, sunPos: [0, 60, 0],
     hemiSky: 0x3b4a7a, hemiGround: 0x0b0f1a, hemiInt: 0.6, fogNear: 40, fogFar: 380, bloom: 0.55, bloomThreshold: 0.72,
@@ -277,3 +282,48 @@ export const MAGNET_RADIUS = 25;
 export const NITRO_MAX_CHARGES = 3;
 /** Chaser toughness grows with Heat: x1.0, x1.2, x1.4, x1.6. */
 export const ENEMY_HP_PER_HEAT = 0.2;
+
+export type ModeId = 'city' | 'desert';
+
+/** A playable location. Desert is the hard mode: faster Heat, tougher chasers, road rollers, more cash. */
+export interface ModeDef {
+  id: ModeId;
+  name: string;
+  tagline: string;
+  heatStarts: [number, number, number, number];
+  presets: [PresetId, PresetId, PresetId, PresetId];
+  biomes: [Biome, Biome, Biome, Biome];
+  enemyHpMult: number;
+  enemyDpsMult: number;
+  /** Multiplies the time between spawns (lower = more chasers). */
+  spawnIntervalMult: number;
+  extraEnemies: number;
+  cashMult: number;
+  rollers: boolean;
+}
+
+export const MODES: Record<ModeId, ModeDef> = {
+  city: {
+    id: 'city', name: 'City Chase', tagline: 'Brick streets & coastal highway',
+    heatStarts: [0, 45, 105, 150], presets: ['preset_morning', 'preset_midday', 'preset_sunset', 'preset_night'],
+    biomes: ['city', 'coastal', 'city', 'city'],
+    enemyHpMult: 1, enemyDpsMult: 1, spawnIntervalMult: 1, extraEnemies: 0, cashMult: 1, rollers: false,
+  },
+  desert: {
+    id: 'desert', name: 'Desert Run', tagline: 'HARD · road rollers · 1.5x cash',
+    heatStarts: [0, 35, 85, 130], presets: ['preset_desert', 'preset_desert', 'preset_sunset', 'preset_night'],
+    biomes: ['desert', 'desert', 'desert', 'desert'],
+    enemyHpMult: 1.2, enemyDpsMult: 1.25, spawnIntervalMult: 0.8, extraEnemies: 1, cashMult: 1.5, rollers: true,
+  },
+};
+
+/** Heat table for a mode (timings, lighting, biome and chaser caps adjusted). */
+export function heatLevelsFor(mode: ModeDef): HeatDef[] {
+  return HEAT_LEVELS.map((h, i) => ({
+    ...h,
+    start: mode.heatStarts[i],
+    preset: mode.presets[i],
+    biome: mode.biomes[i],
+    maxEnemies: h.maxEnemies + mode.extraEnemies,
+  }));
+}

@@ -4,11 +4,11 @@ import { C } from '../../core/Palette';
 import { mulberry32 } from '../../core/math';
 import { ROAD } from '../../data/config';
 
-export type ChunkKind = 'straight' | 'curveL' | 'curveR' | 'highway';
+export type ChunkKind = 'straight' | 'curveL' | 'curveR' | 'highway' | 'desert' | 'desertL' | 'desertR';
 export const CURVE_TURN = Math.PI / 4; // 45° per curved chunk
 
 export function chunkTurn(kind: ChunkKind): number {
-  return kind === 'curveL' ? CURVE_TURN : kind === 'curveR' ? -CURVE_TURN : 0;
+  return kind === 'curveL' || kind === 'desertL' ? CURVE_TURN : kind === 'curveR' || kind === 'desertR' ? -CURVE_TURN : 0;
 }
 
 /** Local-frame centerline sample for a chunk that starts at the origin heading -Z. */
@@ -572,12 +572,162 @@ function coastalHighway(b: GeoBuilder, rng: Rng, L: number, variant: number): vo
   }
 }
 
+const SAND = [0xdcb57c, 0xd2a86e, 0xe4c38d, 0xc99c62];
+const ROCK = [0xb5603a, 0xa65434, 0xc4714a, 0x8f4a30];
+
+function saguaro(b: GeoBuilder, rng: Rng): void {
+  const h = rr(rng, 2.6, 4.6);
+  const green = rpick(rng, [0x4f7d3a, 0x5b8a42, 0x466f33]);
+  b.cyl(0.26, 0.3, h, 7, green, [0, h / 2, 0]);
+  b.sphere(0.26, 7, 3, green, [0, h, 0]);
+  const arms = rng() < 0.3 ? 0 : rng() < 0.6 ? 1 : 2;
+  for (let i = 0; i < arms; i++) {
+    const side = i === 0 ? 1 : -1;
+    const ay = rr(rng, h * 0.35, h * 0.6);
+    const up = rr(rng, 0.8, 1.6);
+    b.cyl(0.17, 0.17, 0.75, 6, green, [side * 0.5, ay, 0], { rot: [0, 0, Math.PI / 2] });
+    b.cyl(0.17, 0.17, up, 6, green, [side * 0.85, ay + up / 2, 0]);
+    b.sphere(0.17, 6, 3, green, [side * 0.85, ay + up, 0]);
+  }
+}
+
+function mesa(b: GeoBuilder, rng: Rng, w: number, h: number, d: number): void {
+  let y = 0;
+  let cw = w;
+  let cd = d;
+  const layers = 3 + Math.floor(rng() * 3);
+  for (let i = 0; i < layers; i++) {
+    const lh = (h / layers) * rr(rng, 0.8, 1.2);
+    b.box(cw, lh, cd, ROCK[i % ROCK.length], [rr(rng, -0.4, 0.4), y + lh / 2, rr(rng, -0.4, 0.4)]);
+    y += lh;
+    cw *= rr(rng, 0.86, 0.97);
+    cd *= rr(rng, 0.86, 0.97);
+  }
+  b.box(cw * 1.02, 0.4, cd * 1.02, 0x7e3f28, [0, y + 0.2, 0]);
+}
+
+/** Sun-bleached desert highway: cracked asphalt, gravel shoulders, dunes, cacti, mesas, poles. */
+function desertRoad(b: GeoBuilder, rng: Rng, turn: number, L: number, variant: number): void {
+  const segs = turn === 0 ? 1 : 10;
+  strip(b, turn, L, -ROAD.halfWidth, ROAD.halfWidth, 0, 0.3, 0x5c5852, segs);
+  for (const lat of [-5, 5]) dashes(b, turn, L, lat, 0xe9e4d6, 3, 6, 0.18);
+  solidLine(b, turn, L, -0.15, 0xe0b93a, 0.13);
+  solidLine(b, turn, L, 0.15, 0xe0b93a, 0.13);
+  for (const lat of [-9.5, 9.5]) solidLine(b, turn, L, lat, 0xe9e4d6, 0.2);
+  // Cracks and sand drifts on the asphalt
+  for (let i = 0; i < 10; i++) {
+    b.frame = frameAt(rr(rng, 2, L - 2), rr(rng, -9, 9), turn, L);
+    b.box(rr(rng, 0.05, 0.09), 0.012, rr(rng, 1.2, 4), 0x3b3834, [0, 0.006, 0], { rot: [0, rr(rng, -0.8, 0.8), 0] });
+  }
+  for (let i = 0; i < 3; i++) {
+    b.frame = frameAt(rr(rng, 3, L - 3), (rng() < 0.5 ? -1 : 1) * rr(rng, 7, 9.6), turn, L);
+    b.box(rr(rng, 1.5, 3), 0.02, rr(rng, 2, 5), 0xc9a36c, [0, 0.01, 0], { rot: [0, rng(), 0] });
+  }
+  b.frame = null;
+  // Gravel shoulders + open desert floor
+  for (const side of [-1, 1]) {
+    strip(b, turn, L, side * 10.0, side * 12.0, -0.02, 0.3, 0xa89a86, segs);
+    strip(b, turn, L, side * 12.0, side * 90, -0.06, 0.3, SAND[0], segs);
+  }
+  // Reflector posts (glow at night)
+  for (const side of [-1, 1]) {
+    for (let s = 5; s < L; s += 12.5) {
+      b.frame = frameAt(s, side * 11.0, turn, L, 0, -0.02);
+      b.box(0.1, 1.0, 0.1, 0xf4f1e8, [0, 0.5, 0]);
+      b.box(0.11, 0.14, 0.04, side > 0 ? 0xff5a2a : 0xffd23f, [0, 0.85, -0.06], { layer: 'glow' });
+    }
+  }
+  // Dunes, rocks, shrubs, cacti
+  b.defaultLayer = 'far';
+  for (let i = 0; i < 6; i++) {
+    const side = rng() < 0.5 ? -1 : 1;
+    b.frame = frameAt(rr(rng, 0, L), side * rr(rng, 24, 75), turn, L);
+    b.ico(rr(rng, 6, 15), rpick(rng, SAND), [0, -1.2, 0], { scale: [1.6, 0.28, 1] });
+  }
+  b.defaultLayer = 'lit';
+  for (let i = 0; i < 7; i++) {
+    const side = rng() < 0.5 ? -1 : 1;
+    b.frame = frameAt(rr(rng, 1, L - 1), side * rr(rng, 13.5, 40), turn, L, rng() * 6, -0.06);
+    const t = rng();
+    if (t < 0.45) saguaro(b, rng);
+    else if (t < 0.75) b.ico(rr(rng, 0.5, 1.4), rpick(rng, [0x9b8b7a, 0xa0603e, 0x8a7a68]), [0, 0.2, 0], { scale: [1.3, 0.75, 1] });
+    else b.ico(rr(rng, 0.35, 0.6), rpick(rng, [0x6f7a3c, 0x7d7a45, 0x5f6a34]), [0, 0.25, 0], { scale: [1.4, 0.7, 1.2] });
+  }
+  // Big mesa landmark sometimes
+  if (rng() < 0.45) {
+    b.defaultLayer = 'far';
+    const side = rng() < 0.5 ? -1 : 1;
+    b.frame = frameAt(rr(rng, 5, L - 5), side * rr(rng, 55, 85), turn, L, rng() * 6);
+    mesa(b, rng, rr(rng, 18, 34), rr(rng, 14, 30), rr(rng, 14, 26));
+    b.defaultLayer = 'lit';
+  }
+  // Telephone poles with wires along the right side
+  for (const s of [0, 25]) {
+    b.frame = frameAt(s + 2, 13.2, turn, L, 0, -0.06);
+    b.cyl(0.11, 0.14, 7.5, 6, 0x6b4a2e, [0, 3.75, 0]);
+    b.box(1.8, 0.12, 0.12, 0x6b4a2e, [0, 7.0, 0]);
+    for (const x of [-0.75, 0.75]) b.box(0.08, 0.14, 0.08, 0xd8e4ee, [x, 7.12, 0]);
+  }
+  if (turn === 0) {
+    for (const x of [13.2 - 0.75, 13.2 + 0.75]) b.box(0.025, 0.025, 25, 0x2a2a2a, [x, 7.05, -14.5]);
+    for (const x of [13.2 - 0.75, 13.2 + 0.75]) b.box(0.025, 0.025, 25, 0x2a2a2a, [x, 7.05, -39.5]);
+  }
+  // Variant set pieces
+  if (variant === 0 && turn === 0) {
+    // Abandoned gas station
+    b.frame = frameAt(25, -20, turn, L, -Math.PI / 2, -0.06);
+    b.box(8, 3.4, 6, 0xd8c7a6, [0, 1.7, 2]);
+    b.box(8.4, 0.3, 6.4, 0xb0412e, [0, 3.5, 2]);
+    b.box(3.2, 1.6, 0.08, 0x2b3440, [-1.5, 1.6, -1.02]);
+    b.box(1.1, 2.3, 0.08, 0x5e3b22, [2.4, 1.15, -1.02]);
+    b.box(9, 0.35, 5, 0xb0412e, [0, 4.4, -4.5]);
+    for (const x of [-3.8, 3.8]) b.box(0.25, 4.3, 0.25, 0xe6e0d2, [x, 2.15, -6.5]);
+    for (const x of [-1.6, 1.6]) {
+      b.box(0.7, 1.5, 0.5, 0xc8402c, [x, 0.75, -4.5]);
+      b.box(0.5, 0.3, 0.05, 0xfff1c4, [x, 1.2, -4.76], { layer: 'glow' });
+    }
+    b.box(2.6, 0.9, 0.2, 0xf2c230, [0, 5.1, -4.5]);
+    b.box(2.2, 0.5, 0.22, 0xc8402c, [0, 5.1, -4.5], { layer: 'glow' });
+  } else if (variant === 1) {
+    // Rusted wreck + bleached signboard
+    b.frame = frameAt(30, 17, turn, L, 0.7, -0.06);
+    b.box(1.8, 0.9, 4, 0x8a4f2e, [0, 0.6, 0], { rot: [0, 0, 0.12] });
+    b.box(1.5, 0.6, 2, 0x6f3e24, [0, 1.3, 0.3], { rot: [0, 0, 0.12] });
+    b.frame = frameAt(12, -15, turn, L, Math.PI / 2, -0.06);
+    for (const x of [-2, 2]) b.box(0.2, 4, 0.2, 0x6b4a2e, [x, 2, 0]);
+    b.box(5, 2.2, 0.15, 0xe8dcc0, [0, 3.6, 0]);
+    b.box(4.4, 0.5, 0.17, 0xb0412e, [0, 4.1, 0]);
+    b.box(3, 0.35, 0.17, 0x2b3440, [0, 3.3, 0]);
+  }
+  b.frame = null;
+}
+
+/** Distant mesas ringing the desert horizon (replaces the city skyline in desert mode). */
+export function buildMesaRing(seed = 21): THREE.Group {
+  const rng = mulberry32(seed);
+  const b = new GeoBuilder();
+  const count = 34;
+  for (let i = 0; i < count; i++) {
+    const a = (i / count) * Math.PI * 2 + rr(rng, -0.05, 0.05);
+    const r = rr(rng, 240, 320);
+    b.frame = new THREE.Matrix4().makeRotationY(-a).setPosition(Math.cos(a) * r, 0, Math.sin(a) * r);
+    mesa(b, rng, rr(rng, 30, 70), rr(rng, 22, 60), rr(rng, 25, 50));
+  }
+  b.frame = null;
+  const group = new THREE.Group();
+  group.name = 'mesa_ring';
+  const body = b.buildGeometry('lit');
+  if (body) group.add(new THREE.Mesh(body, SKYLINE_MATS.body));
+  return group;
+}
+
 /** Builds the visual template for a chunk in local space (start at origin, heading -Z). */
 export function buildChunkTemplate(kind: ChunkKind, seed: number): THREE.Group {
   const rng = mulberry32(seed);
   const b = new GeoBuilder();
   const L = ROAD.chunkLength;
   if (kind === 'highway') coastalHighway(b, rng, L, seed % 3);
+  else if (kind === 'desert' || kind === 'desertL' || kind === 'desertR') desertRoad(b, rng, chunkTurn(kind), L, seed % 3);
   else cityStreet(b, rng, chunkTurn(kind), L);
   const g = b.build({ castShadow: true, receiveShadow: true });
   g.name = `chunk_${kind}`;

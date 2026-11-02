@@ -160,7 +160,7 @@ export class EnemyManager {
     }
     dist = clamp(dist, ctx.track.backDist + 5, ctx.track.frontDist - 10);
     e.active = true;
-    e.hp = Math.round(e.def.hp * (1 + ENEMY_HP_PER_HEAT * (ctx.heat.level - 1)));
+    e.hp = Math.round(e.def.hp * (1 + ENEMY_HP_PER_HEAT * (ctx.heat.level - 1)) * ctx.mode.enemyHpMult);
     e.dist = dist;
     e.lat = lat;
     e.speed = fromAhead ? p.vF * 0.2 : p.vF + 8;
@@ -411,7 +411,7 @@ export class EnemyManager {
       e.fireT = e.burstOn ? (e.kind === 'enemy_bike' ? 0.8 : 1.2) : e.kind === 'enemy_bike' ? rand(0.7, 1.3) : rand(1.4, 2.4);
     }
     if (!e.burstOn || !inRange) return;
-    ctx.damagePlayer(e.def.dps * dt, 0);
+    ctx.damagePlayer(e.def.dps * ctx.mode.enemyDpsMult * dt, 0);
     e.shotT -= dt;
     if (e.shotT <= 0) {
       e.shotT = e.kind === 'enemy_bike' ? 0.16 : 0.09;

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GeoBuilder, socket } from '../../core/GeoBuilder';
-import { C } from '../../core/Palette';
+import { C, glowMat } from '../../core/Palette';
 import type { SocketMap } from './vehicles';
 
 const ALONG_Z: [number, number, number] = [Math.PI / 2, 0, 0];
@@ -199,6 +199,61 @@ export function buildCone(): THREE.Group {
   g.name = 'body';
   const root = new THREE.Group();
   root.add(g);
+  return root;
+}
+
+/**
+ * Yellow construction road roller (faces -Z). Children: 'drum' spins about X, 'beacon' blinks.
+ * ~2.5 m wide, ~5.2 m long, ~3.1 m tall.
+ */
+export function buildRoadRoller(): THREE.Group {
+  const root = new THREE.Group();
+  const yellow = 0xf2b51a;
+  const dark = 0x2b2d33;
+  const b = new GeoBuilder();
+  // Drum yoke (frame around the front drum) with hazard stripes
+  for (const sx of [-1, 1]) {
+    b.box(0.18, 1.5, 1.9, yellow, [sx * 1.27, 1.05, -1.7]);
+    for (let i = 0; i < 4; i++) b.box(0.2, 0.18, 0.5, i % 2 ? yellow : dark, [sx * 1.29, 1.65, -2.4 + i * 0.47], { rot: [0.5, 0, 0] });
+  }
+  b.box(2.7, 0.22, 1.9, yellow, [0, 1.85, -1.7]);
+  b.box(2.6, 0.08, 0.3, dark, [0, 0.5, -2.7]);
+  // Chassis + engine body + cab
+  b.box(2.2, 0.9, 3.0, yellow, [0, 1.15, 0.9]);
+  b.box(2.1, 0.5, 1.3, 0xd99e12, [0, 1.85, 1.6]);
+  for (let i = 0; i < 5; i++) b.box(0.06, 0.32, 1.1, dark, [-0.8 + i * 0.4, 1.85, 1.6]);
+  b.box(1.5, 0.35, 1.3, dark, [0, 1.75, 0.15]);
+  for (const sx of [-1, 1]) for (const sz of [-0.45, 0.75]) b.box(0.08, 1.3, 0.08, dark, [sx * 0.75, 2.55, sz]);
+  b.box(1.9, 0.12, 1.7, yellow, [0, 3.2, 0.15]);
+  b.box(0.35, 0.5, 0.3, 0x3a3f47, [0, 2.15, 0.35]);
+  b.ico(0.16, 0xe0ac85, [0, 2.6, 0.35]);
+  b.cyl(0.2, 0.2, 0.06, 8, 0xf2c230, [0, 2.78, 0.35]);
+  b.cyl(0.08, 0.1, 1.1, 6, dark, [0.7, 2.6, 2.0]);
+  // Rear wheels
+  for (const sx of [-1, 1]) {
+    b.cyl(0.62, 0.62, 0.55, 10, 0x1d1e22, [sx * 1.0, 0.62, 2.0], { rot: [0, 0, Math.PI / 2] });
+    b.cyl(0.3, 0.3, 0.58, 8, yellow, [sx * 1.0, 0.62, 2.0], { rot: [0, 0, Math.PI / 2] });
+  }
+  const body = b.build();
+  body.name = 'body';
+  root.add(body);
+  // Front steel drum (rolling)
+  const drum = new THREE.Group();
+  drum.name = 'drum';
+  drum.position.set(0, 0.85, -1.7);
+  const db = new GeoBuilder();
+  db.cyl(0.85, 0.85, 2.3, 14, 0x8d9399, [0, 0, 0], { rot: [0, 0, Math.PI / 2] });
+  db.cyl(0.6, 0.6, 2.34, 10, 0x5b6168, [0, 0, 0], { rot: [0, 0, Math.PI / 2] });
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    db.box(2.32, 0.06, 0.12, 0x6b7177, [0, Math.sin(a) * 0.86, Math.cos(a) * 0.86], { rot: [-a, 0, 0] });
+  }
+  drum.add(db.build());
+  root.add(drum);
+  const beacon = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 0.22, 8), glowMat(0xff8a1a));
+  beacon.position.set(0, 3.38, 0.15);
+  beacon.name = 'beacon';
+  root.add(beacon);
   return root;
 }
 

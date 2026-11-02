@@ -2,10 +2,10 @@ import * as THREE from 'three';
 import type { Engine } from '../core/Engine';
 import { FIXED_DT, PhysicsWorld } from '../core/Physics';
 import type { AssetRegistry } from '../assets/AssetRegistry';
-import { buildSkyline } from '../assets/procedural/environment';
+import { buildMesaRing, buildSkyline } from '../assets/procedural/environment';
 import type { InputManager, FrameInput } from '../input/Input';
 import type { PeerHost } from '../input/PeerHost';
-import { HEAT_LEVELS, NEAR_MISS_BONUS, NITRO_MAX_CHARGES, POWERUPS, type HeatDef, type PowerupId } from '../data/config';
+import { MODES, NEAR_MISS_BONUS, NITRO_MAX_CHARGES, POWERUPS, heatLevelsFor, type HeatDef, type ModeDef, type ModeId, type PowerupId } from '../data/config';
 import { damp, rand } from '../core/math';
 import { audio } from '../core/Audio';
 import { Track, type TrackPoint } from './Track';
@@ -36,6 +36,10 @@ export interface RunResult {
   objectiveCash: number;
   comboCash: number;
   bestCombo: number;
+  /** Extra cash from the location's multiplier (desert = +50%). */
+  modeBonus: number;
+  mode: ModeId;
+  squashed: boolean;
   total: number;
   score: number;
 }
@@ -63,10 +67,13 @@ export class Game implements GameCtx {
   readonly objectives = new Objectives();
   readonly hud: Hud;
   private skyline: THREE.Group;
+  private mesas: THREE.Group;
+  mode: ModeDef = MODES.city;
   private headlight: THREE.SpotLight;
   state: State = 'idle';
   private acc = 0;
   private wreckT = 0;
+  private wreckReason: 'crash' | 'squash' = 'crash';
   private runCash = 0;
   private nearMissCash = 0;
   private vibeAcc = 0;
@@ -93,6 +100,9 @@ export class Game implements GameCtx {
     this.scene.add(this.track.root);
     this.skyline = buildSkyline();
     this.scene.add(this.skyline);
+    this.mesas = buildMesaRing();
+    this.mesas.visible = false;
+    this.scene.add(this.mesas);
     this.fx = new Effects(this.scene);
     this.player = new PlayerCar(this.physics, assets);
     this.scene.add(this.player.root);
@@ -305,15 +315,21 @@ export class Game implements GameCtx {
   }
 
   // --- Run lifecycle ---
-  start(loadout: Loadout): void {
+  start(loadout: Loadout, modeId: ModeId = 'city'): void {
+    this.mode = MODES[modeId] ?? MODES.city;
+    const levels = heatLevelsFor(this.mode);
     this.fx.clear();
     this.enemies.reset();
     this.hazards.reset();
+    this.hazards.rollersEnabled = this.mode.rollers;
     this.ambient.reset();
-    this.director.reset();
+    this.director.reset(levels);
     this.objectives.reset();
-    this.hazards.heat = HEAT_LEVELS[0];
-    this.track.reset();
+    this.hazards.heat = levels[0];
+    this.track.reset(levels[0].biome);
+    const desert = levels[0].biome === 'desert';
+    this.skyline.visible = !desert;
+    this.mesas.visible = desert;
     this.player.spawn(loadout);
     this.player.rampHandles = new Set(this.hazards.rampHandles());
     this.combat.reset(loadout);
@@ -326,15 +342,16 @@ export class Game implements GameCtx {
     this.player.dist = 0;
     this.player.lat = 0;
     this.player.trackHeading = 0;
-    this.lighting.setPreset(HEAT_LEVELS[0].preset, true);
-    this.track.biome = HEAT_LEVELS[0].biome;
+    this.lighting.setPreset(levels[0].preset, true);
+    this.track.biome = levels[0].biome;
     this.rig.reset(this.player);
     this.state = 'playing';
     this.input.resetTransient();
     this.input.setTouchVisible(true);
     this.hud.show(true);
     this.hud.setLinked(this.host.connected);
-    this.hud.showBanner('ESCAPE!', 'start', 1.4);
+    this.hud.showBanner(desert ? 'DESERT RUN!' : 'ESCAPE!', 'start', 1.4);
+    if (desert) setTimeout(() => this.state === 'playing' && this.toast('Watch out for ROAD ROLLERS — jump them or dodge!', 'warn'), 1600);
     audio.startEngine();
     audio.setMusicIntensity(1);
   }
@@ -373,15 +390,37 @@ export class Game implements GameCtx {
     audio.warning();
   }
 
-  private wreck(): void {
+  /** Run over by a road roller: the car is flattened like a pancake and the run ends immediately. */
+  squashPlayer(): void {
+    if (this.state !== 'playing') return;
+    this.player.squashed = true;
+    this.player.hp = 0;
+    this.wreck('squash');
+  }
+
+  private wreck(reason: 'crash' | 'squash' = 'crash'): void {
     if (this.state !== 'playing') return;
     this.state = 'wrecking';
     this.wreckT = WRECK_REAL_SECONDS;
     this.player.dead = true;
+    this.wreckReason = reason;
     this.objectives.finish();
     this.combat.target = null;
     this.fx.setReticle(null, this.camera, 1);
     this.input.setTouchVisible(false);
+    if (reason === 'squash') {
+      const p = this.player.renderPos.clone().setY(0.4);
+      for (let i = 0; i < 8; i++) this.fx.puff(p.clone().add(new THREE.Vector3(rand(-1.8, 1.8), 0, rand(-2.2, 2.2))), new THREE.Vector3(rand(-5, 5), rand(0.3, 1.2), rand(-5, 5)), 0.55, 0.8, 0xc9a777);
+      this.rig.shake(0.7);
+      this.flash(0.25);
+      this.host.vibrate(500);
+      navigator.vibrate?.(400);
+      audio.squash();
+      audio.stopEngine();
+      audio.setMusicIntensity(0.5);
+      this.hud.showBanner('S Q U A S H E D !', 'wrecked', 3);
+      return;
+    }
     this.player.addImpulse(new THREE.Vector3(0, 9, 0));
     const p = this.player.renderPos.clone().setY(1);
     this.fx.explosion(p, 2.2, 0x8c2a1e);
@@ -398,7 +437,9 @@ export class Game implements GameCtx {
   private result(): RunResult {
     const distanceBonus = Math.floor(Math.max(0, this.player.dist) / 10);
     const o = this.objectives;
-    const total = distanceBonus + this.runCash + this.nearMissCash + o.objectiveCash + o.comboCash;
+    const base = distanceBonus + this.runCash + this.nearMissCash + o.objectiveCash + o.comboCash;
+    const modeBonus = Math.round(base * (this.mode.cashMult - 1));
+    const total = base + modeBonus;
     return {
       time: this.director.time,
       maxHeat: this.director.maxHeat,
@@ -411,6 +452,9 @@ export class Game implements GameCtx {
       objectiveCash: o.objectiveCash,
       comboCash: o.comboCash,
       bestCombo: o.bestMult,
+      modeBonus,
+      mode: this.mode.id,
+      squashed: this.wreckReason === 'squash',
       total,
       score: Math.round(this.director.time * 10 + this.combat.kills * 50 + total),
     };
@@ -479,6 +523,7 @@ export class Game implements GameCtx {
     this.rig.update(this.player, wrecking ? dt : sdt, wrecking, dt);
     this.lighting.update(sdt, this.player.renderPos, this.camera);
     this.skyline.position.set(this.camera.position.x, 0, this.camera.position.z);
+    this.mesas.position.set(this.camera.position.x, 0, this.camera.position.z);
     this.updateHeadlight();
     this.updateThreats();
 
@@ -499,9 +544,13 @@ export class Game implements GameCtx {
 
     if (wrecking) {
       this.wreckT -= dt;
+      if (this.wreckReason === 'squash') {
+        if (Math.random() < 0.15) this.fx.puff(this.player.renderPos.clone().setY(0.3), new THREE.Vector3(rand(-1, 1), 0.8, rand(-1, 1)), 0.8, 1.2, 0xc9a777);
+      } else {
       this.player.model.rotation.z = damp(this.player.model.rotation.z, 2.7, 1.5, sdt * 5);
       if (Math.random() < 0.5) this.fx.flame(this.player.renderPos.clone().add(new THREE.Vector3(rand(-0.8, 0.8), 0.6, rand(-1, 1))), new THREE.Vector3(0, 3, 0), 0.9, 0.6);
       if (Math.random() < 0.3) this.fx.puff(this.player.renderPos.clone().setY(1.5), new THREE.Vector3(rand(-1, 1), 3, rand(-1, 1)), 1.0, 1.4, 0x333333);
+      }
       if (this.wreckT <= 0) {
         this.state = 'idle';
         this.hud.show(false);

@@ -73,6 +73,8 @@ export class PlayerCar {
   trackHeading = 0;
   wall = 12;
   dead = false;
+  /** Flattened by a road roller: pancake squash-and-stretch on the model. */
+  squashed = false;
   private fxTimer = 0;
   private skidTimer = 0;
   onSparkTier: ((tier: number) => void) | null = null;
@@ -146,6 +148,7 @@ export class PlayerCar {
     this.nitroCharges = 1;
     this.magnet = 0;
     this.dead = false;
+    this.squashed = false;
     this.grounded = true;
     this.wasGrounded = true;
     this.airTime = 0;
@@ -243,7 +246,8 @@ export class PlayerCar {
   fixedUpdate(dt: number, input: FrameInput): void {
     if (this.dead) {
       const lv = this.body.linvel();
-      this.body.setLinvel({ x: lv.x * 0.97, y: lv.y, z: lv.z * 0.97 }, true);
+      const k = this.squashed ? 0.6 : 0.97;
+      this.body.setLinvel({ x: lv.x * k, y: this.squashed ? Math.min(lv.y, 0) : lv.y, z: lv.z * k }, true);
       return;
     }
     const t = this.body.translation();
@@ -389,6 +393,12 @@ export class PlayerCar {
   }
 
   updateVisual(alpha: number, dt: number, fx: Effects): void {
+    if (this.squashed) {
+      // Cartoon pancake: flatten Y, stretch X/Z, settle on the road.
+      const m = this.model.scale;
+      m.set(damp(m.x, 1.55, 16, dt), damp(m.y, 0.12, 22, dt), damp(m.z, 1.35, 16, dt));
+      this.model.position.y = 0;
+    }
     this.renderPos.lerpVectors(this.prevPos, this.pos, alpha);
     this.root.position.set(this.renderPos.x, this.renderPos.y - this.rideHeight, this.renderPos.z);
     const targetDriftYaw = this.drift.active ? this.drift.dir * 0.42 : 0;

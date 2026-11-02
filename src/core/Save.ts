@@ -1,5 +1,5 @@
 import type { SpeakerMode } from './Audio';
-import { FACTORY_PAINT, type CarId, type GadgetId, type PaintId, type UpgradeCategory, type WeaponId } from '../data/config';
+import { FACTORY_PAINT, type CarId, type GadgetId, type ModeId, type PaintId, type UpgradeCategory, type WeaponId } from '../data/config';
 
 export interface LeaderEntry {
   name: string;
@@ -23,6 +23,9 @@ export interface SaveData {
   cash: number;
   bestTime: number;
   bestScore: number;
+  /** Selected location and the best survival time in each. */
+  mode: ModeId;
+  bestTimes: Record<ModeId, number>;
   ownedCars: CarId[];
   car: CarId;
   /** Paint jobs bought per car, and the one each car wears. */
@@ -48,6 +51,8 @@ export function defaultSave(): SaveData {
     cash: 0,
     bestTime: 0,
     bestScore: 0,
+    mode: 'city',
+    bestTimes: { city: 0, desert: 0 },
     ownedCars: ['car_sedan'],
     car: 'car_sedan',
     ownedPaints: { car_sedan: [FACTORY_PAINT.car_sedan], car_tuner: [FACTORY_PAINT.car_tuner], car_truck: [FACTORY_PAINT.car_truck] },
@@ -90,6 +95,8 @@ export class SaveStore {
         settings: { ...base.settings, ...(parsed.settings ?? {}) },
         ownedPaints: { ...base.ownedPaints, ...(parsed.ownedPaints ?? {}) },
         paint: { ...base.paint, ...(parsed.paint ?? {}) },
+        mode: parsed.mode === 'desert' ? 'desert' : 'city',
+        bestTimes: { city: parsed.bestTime ?? 0, desert: 0, ...(parsed.bestTimes ?? {}) },
       };
     } catch {
       return base;
