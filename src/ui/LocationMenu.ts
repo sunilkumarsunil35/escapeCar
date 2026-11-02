@@ -61,6 +61,28 @@ const ART: Record<ModeId, string> = {
       <rect x="176" y="84" width="58" height="9" rx="4" fill="#5a3c26"/><polygon points="176,80 152,88 176,96" fill="#356b3a"/>
       <path d="M160 150 L160 104" stroke="#7CFC8A" stroke-width="3" stroke-dasharray="5 4"/><polygon points="153,108 160,96 167,108" fill="#7CFC8A"/>
     </g>`,
+  beach: `
+    <defs><linearGradient id="skB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3fa9e6"/><stop offset="1" stop-color="#cdeaf3"/></linearGradient></defs>
+    <rect width="320" height="180" fill="url(#skB)"/>
+    <circle cx="70" cy="30" r="14" fill="#fff6d6"/>
+    <rect y="90" width="320" height="90" fill="#e2cf9c"/>
+    <polygon points="174,92 320,92 320,180 300,180" fill="#ead9a8"/>
+    <polygon points="196,92 320,92 320,150" fill="#35c4cf"/>
+    <polygon points="230,92 320,92 320,118" fill="#1e96cf"/>
+    <polyline points="196,92 320,150" stroke="#f4fbff" stroke-width="3" fill="none"/>
+    ${[[250, 104], [282, 112], [296, 130]].map(([x, y]) => `<path d="M${x} ${y} q6 -3 12 0" stroke="#fff" stroke-width="1.5" fill="none"/>`).join('')}
+    ${road('#5a5d62', '#f2efe6', '#e8c53a')}
+    <polygon points="93,128 236,128 252,139 78,139" fill="#0b3f57"/>
+    ${[0, 1, 2, 3, 4, 5, 6, 7].map((i) => `<polygon points="${92 + i * 20},128 ${102 + i * 20},124 ${112 + i * 20},128" fill="#5a5d62"/><polygon points="${80 + i * 22},139 ${91 + i * 22},143 ${102 + i * 22},139" fill="#5a5d62"/>`).join('')}
+    <path d="M110 136 q30 -10 60 0" stroke="#d8f3f7" stroke-width="2" fill="none" opacity="0.7"/>
+    <polygon points="104,162 142,162 136,146 112,146" fill="#f2c230"/>
+    ${[0, 1, 2].map((i) => `<polygon points="${110 + i * 9},162 ${115 + i * 9},162 ${120 + i * 8},146 ${116 + i * 8},146" fill="#1d1e22"/>`).join('')}
+    <path d="M123 146 Q140 110 160 152" stroke="#7CFC8A" stroke-width="2.5" stroke-dasharray="4 3" fill="none"/>
+    <g transform="translate(262,120)"><polygon points="-18,0 22,0 18,8 -14,8" fill="#23262c"/><rect x="-16" y="-1" width="36" height="3" fill="#8c2a1e"/><rect x="-2" y="-8" width="8" height="7" fill="#0d1118"/><rect x="-20" y="-6" width="14" height="2" fill="#1d1e22"/><circle cx="-23" cy="-5" r="4" fill="#ffd060" opacity="0.9"/></g>
+    <path d="M214 132 q10 -22 22 0" stroke="#fff" stroke-width="1" stroke-dasharray="2 2" fill="none"/>
+    <g transform="translate(222,118) rotate(-30)"><ellipse rx="6" ry="3" fill="#f28c38"/><polygon points="5,0 10,-3 10,3" fill="#d9622b"/></g>
+    <g transform="translate(26,150)"><rect x="-2" y="-34" width="4" height="34" fill="#7a5c3a"/>${[0, 1, 2, 3, 4, 5].map((i) => `<ellipse cx="${Math.cos(i) * 10}" cy="${-34 + Math.sin(i) * 3}" rx="11" ry="3" fill="#3f8f3a" transform="rotate(${i * 30 - 75} ${Math.cos(i) * 10} ${-34 + Math.sin(i) * 3})"/>`).join('')}</g>
+    <g transform="translate(292,160)"><circle r="12" fill="#0e7490" stroke="#ffe066" stroke-width="2"/><text y="5" text-anchor="middle" font-size="14" fill="#ffe066">⚓</text></g>`,
 };
 
 /** Full-screen "choose location" picker with mini-wallpaper cards (opened from the garage). */
@@ -100,7 +122,7 @@ export class LocationMenu {
     const cards = this.el.querySelector('.loc-cards') as HTMLElement;
     cards.innerHTML = MODE_ORDER.map((id) => {
       const m = MODES[id];
-      const skulls = '💀'.repeat(m.difficulty) + '<i>' + '💀'.repeat(3 - m.difficulty) + '</i>';
+      const skulls = '💀'.repeat(m.difficulty) + '<i>' + '💀'.repeat(4 - m.difficulty) + '</i>';
       return `
         <button class="loc-card loc-${id}${d.mode === id ? ' sel' : ''}" data-id="${id}">
           <svg class="loc-art" viewBox="0 0 320 180" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${ART[id]}</svg>

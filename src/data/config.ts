@@ -3,11 +3,11 @@
 export type CarId = 'car_sedan' | 'car_tuner' | 'car_truck';
 export type WeaponId = 'weapon_tommy' | 'weapon_rocket';
 export type GadgetId = 'gadget_mine' | 'gadget_oil';
-export type EnemyKind = 'enemy_bike' | 'enemy_sedan' | 'enemy_chopper';
-export type PowerupId = 'powerup_wrench' | 'powerup_nitro' | 'powerup_magnet';
+export type EnemyKind = 'enemy_bike' | 'enemy_sedan' | 'enemy_chopper' | 'enemy_boat';
+export type PowerupId = 'powerup_wrench' | 'powerup_nitro' | 'powerup_magnet' | 'powerup_boat';
 export type UpgradeCategory = 'engine' | 'tires' | 'armor';
-export type PresetId = 'preset_morning' | 'preset_midday' | 'preset_sunset' | 'preset_night' | 'preset_desert' | 'preset_forest';
-export type Biome = 'city' | 'coastal' | 'desert' | 'forest';
+export type PresetId = 'preset_morning' | 'preset_midday' | 'preset_sunset' | 'preset_night' | 'preset_desert' | 'preset_forest' | 'preset_beach';
+export type Biome = 'city' | 'coastal' | 'desert' | 'forest' | 'beach';
 
 export interface CarDef {
   id: CarId;
@@ -157,6 +157,7 @@ export interface EnemyDef {
 export const ENEMIES: Record<EnemyKind, EnemyDef> = {
   enemy_bike: { kind: 'enemy_bike', name: 'Hitman Bike', hp: 30, speed: 33, cash: 50, dps: 4, range: 7, halfW: 0.45, halfL: 1.1 },
   enemy_sedan: { kind: 'enemy_sedan', name: 'Tommy Sedan', hp: 90, speed: 30, cash: 120, dps: 5.5, range: 30, halfW: 1.0, halfL: 2.1 },
+  enemy_boat: { kind: 'enemy_boat', name: 'Mafia Gunboat', hp: 80, speed: 36, cash: 160, dps: 6, range: 30, halfW: 1.2, halfL: 2.6 },
   enemy_chopper: { kind: 'enemy_chopper', name: 'Mafia Chopper', hp: 300, speed: 0, cash: 500, dps: 0, range: 0, halfW: 2.2, halfL: 4.5 },
 };
 
@@ -191,6 +192,7 @@ export const POWERUPS: Record<PowerupId, PowerupDef> = {
   powerup_wrench: { id: 'powerup_wrench', name: 'REPAIR +35%', duration: 0, color: 0x22c55e },
   powerup_nitro: { id: 'powerup_nitro', name: 'NITRO!', duration: 4, color: 0x38bdf8 },
   powerup_magnet: { id: 'powerup_magnet', name: 'CASH MAGNET', duration: 10, color: 0xef4444 },
+  powerup_boat: { id: 'powerup_boat', name: 'BOAT KIT', duration: 12, color: 0x06b6d4 },
 };
 
 export interface LightingPreset {
@@ -240,6 +242,11 @@ export const LIGHTING_PRESETS: Record<PresetId, LightingPreset> = {
     hemiSky: 0xc4dce4, hemiGround: 0x3d5a2e, hemiInt: 0.7, fogNear: 45, fogFar: 340, bloom: 0.24, bloomThreshold: 0.9,
     windowTint: 0x6b86a3, nightFx: 0, headlights: 0.1, exposure: 1.0,
   },
+  preset_beach: {
+    sky: 0x3fa9e6, fog: 0xcdeaf3, amb: 0xfff6e6, ambInt: 1.0, sun: 0xfff3dc, sunInt: 2.7, sunPos: [30, 65, -20],
+    hemiSky: 0xd8f0ff, hemiGround: 0xd9c08f, hemiInt: 0.6, fogNear: 70, fogFar: 520, bloom: 0.25, bloomThreshold: 0.9,
+    windowTint: 0x6b86a3, nightFx: 0, headlights: 0, exposure: 1.0,
+  },
   preset_night: {
     sky: 0x0f172a, fog: 0x1e293b, amb: 0x334155, ambInt: 0.5, sun: 0x64748b, sunInt: 0.8, sunPos: [0, 60, 0],
     hemiSky: 0x3b4a7a, hemiGround: 0x0b0f1a, hemiInt: 0.6, fogNear: 40, fogFar: 380, bloom: 0.55, bloomThreshold: 0.72,
@@ -288,8 +295,11 @@ export const NITRO_MAX_CHARGES = 3;
 /** Chaser toughness grows with Heat: x1.0, x1.2, x1.4, x1.6. */
 export const ENEMY_HP_PER_HEAT = 0.2;
 
-export type ModeId = 'city' | 'desert' | 'forest';
-export const MODE_ORDER: ModeId[] = ['city', 'desert', 'forest'];
+export type ModeId = 'city' | 'desert' | 'forest' | 'beach';
+export const MODE_ORDER: ModeId[] = ['city', 'desert', 'forest', 'beach'];
+
+/** Beach layout across the track (positive lateral = sea side) and the Boat Kit timer. */
+export const BEACH = { sandFrom: 10, waterFrom: 19, seaWall: 40, boatTime: 12, gapHalfLen: 4.5 };
 
 /** A playable location. Desert is the hard mode: faster Heat, tougher chasers, road rollers, more cash. */
 export interface ModeDef {
@@ -310,7 +320,9 @@ export interface ModeDef {
   potholes: boolean;
   /** Logging gantries swinging trees across the road (always leaves a gap). */
   cranes: boolean;
-  /** 1-3 skulls on the location card. */
+  /** Seaside: broken roads, Boat Kit amphibious mode, gunboats and fish. */
+  beach: boolean;
+  /** 1-4 skulls on the location card. */
   difficulty: number;
   /** Trap names shown on the location card. */
   traps: string[];
@@ -322,21 +334,29 @@ export const MODES: Record<ModeId, ModeDef> = {
     heatStarts: [0, 45, 105, 150], presets: ['preset_morning', 'preset_midday', 'preset_sunset', 'preset_night'],
     biomes: ['city', 'coastal', 'city', 'city'],
     enemyHpMult: 1, enemyDpsMult: 1, spawnIntervalMult: 1, extraEnemies: 0, cashMult: 1, rollers: false,
-    potholes: false, cranes: false, difficulty: 1, traps: ['Barricades', 'Barrel chains', 'Traffic'],
+    potholes: false, cranes: false, beach: false, difficulty: 1, traps: ['Barricades', 'Barrel chains', 'Traffic'],
   },
   desert: {
     id: 'desert', name: 'Desert Run', tagline: 'HARD · road rollers · 1.5x cash',
     heatStarts: [0, 35, 85, 130], presets: ['preset_desert', 'preset_desert', 'preset_sunset', 'preset_night'],
     biomes: ['desert', 'desert', 'desert', 'desert'],
     enemyHpMult: 1.2, enemyDpsMult: 1.25, spawnIntervalMult: 0.8, extraEnemies: 1, cashMult: 1.5, rollers: true,
-    potholes: false, cranes: false, difficulty: 2, traps: ['Road rollers (instant squash)', 'Faster Heat', 'Tougher chasers'],
+    potholes: false, cranes: false, beach: false, difficulty: 2, traps: ['Road rollers (instant squash)', 'Faster Heat', 'Tougher chasers'],
   },
   forest: {
     id: 'forest', name: 'Forest Run', tagline: 'BRUTAL · crane logs · potholes · 2x cash',
     heatStarts: [0, 30, 75, 115], presets: ['preset_forest', 'preset_forest', 'preset_sunset', 'preset_night'],
     biomes: ['forest', 'forest', 'forest', 'forest'],
     enemyHpMult: 1.35, enemyDpsMult: 1.4, spawnIntervalMult: 0.72, extraEnemies: 1, cashMult: 2, rollers: false,
-    potholes: true, cranes: true, difficulty: 3, traps: ['Crane-swung trees — find the gap', 'Potholes', 'Fastest Heat', 'Toughest chasers'],
+    potholes: true, cranes: true, beach: false, difficulty: 3, traps: ['Crane-swung trees — find the gap', 'Potholes', 'Fast Heat', 'Tough chasers'],
+  },
+  beach: {
+    id: 'beach', name: 'Beach Run', tagline: 'EXTREME · broken roads · gunboats · 2.5x cash',
+    heatStarts: [0, 28, 70, 105], presets: ['preset_beach', 'preset_beach', 'preset_sunset', 'preset_night'],
+    biomes: ['beach', 'beach', 'beach', 'beach'],
+    enemyHpMult: 1.45, enemyDpsMult: 1.5, spawnIntervalMult: 0.65, extraEnemies: 2, cashMult: 2.5, rollers: false,
+    potholes: false, cranes: false, beach: true, difficulty: 4,
+    traps: ['Broken roads — jump a ramp', 'Gunboats', 'Leaping fish', '⚓ Boat Kit: drive into the sea', 'Fastest Heat'],
   },
 };
 

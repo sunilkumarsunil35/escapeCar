@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ENEMIES, ENEMY_HP_PER_HEAT, type EnemyDef, type EnemyKind } from '../data/config';
+import { BEACH, ENEMIES, ENEMY_HP_PER_HEAT, type EnemyDef, type EnemyKind } from '../data/config';
 import { approach, clamp, damp, rand, wrapAngle } from '../core/math';
 import { wheelParts, type AssetRegistry } from '../assets/AssetRegistry';
 import { audio } from '../core/Audio';
@@ -102,6 +102,7 @@ export class EnemyManager {
     };
     for (let i = 0; i < 6; i++) this.list.push(make('enemy_bike'));
     for (let i = 0; i < 4; i++) this.list.push(make('enemy_sedan'));
+    for (let i = 0; i < 3; i++) this.list.push(make('enemy_boat'));
     this.chopper = make('enemy_chopper');
     for (const ring of rings) {
       const missile = assets.instantiate('projectile_missile');
@@ -126,7 +127,7 @@ export class EnemyManager {
 
   get activeCount(): number {
     let n = 0;
-    for (const e of this.list) if (e.active) n++;
+    for (const e of this.list) if (e.active && e.kind !== 'enemy_boat') n++;
     return n;
   }
 
@@ -209,6 +210,76 @@ export class EnemyManager {
     return best;
   }
 
+  /** Beach mode: a gunboat comes up from behind out in the water. */
+  spawnBoat(ctx: GameCtx): Enemy | null {
+    const e = this.list.find((x) => !x.active && x.kind === 'enemy_boat');
+    if (!e) return null;
+    const p = ctx.player;
+    e.active = true;
+    e.hp = Math.round(e.def.hp * (1 + ENEMY_HP_PER_HEAT * (ctx.heat.level - 1)) * ctx.mode.enemyHpMult);
+    e.dist = clamp(p.dist - rand(30, 45), ctx.track.backDist + 5, ctx.track.frontDist - 10);
+    e.lat = rand(BEACH.waterFrom + 3, BEACH.seaWall - 3);
+    e.speed = p.vF + 6;
+    e.latVel = 0;
+    e.knock = 0;
+    e.spin = 0;
+    e.spinAngle = 0;
+    e.side = Math.random() < 0.5 ? -1 : 1;
+    e.fireT = rand(1, 2);
+    e.burstOn = false;
+    e.dying = 0;
+    e.pop = 0;
+    e.hitCd = 0;
+    e.obj.visible = true;
+    e.obj.scale.setScalar(1);
+    e.obj.rotation.set(0, 0, 0);
+    return e;
+  }
+
+  /** Gunboats pace the player out in the water and strafe anyone who comes near the shore. */
+  private updateBoat(e: Enemy, dt: number, ctx: GameCtx): void {
+    const p = ctx.player;
+    const lo = BEACH.waterFrom + 2.5;
+    const hi = BEACH.seaWall - 2;
+    e.hitCd = Math.max(0, e.hitCd - dt);
+    const offset = -2 + Math.sin(ctx.time * 0.4 + e.seed) * 10;
+    const targetLat = clamp(p.lat + e.side * 6, lo, hi);
+    const err = p.dist + offset - e.dist;
+    const desired = clamp(p.vF + clamp(err * 1.3, -12, 20), 0, e.def.speed * (err > 25 ? 1.4 : 1));
+    e.speed = approach(e.speed, desired, 16 * dt);
+    e.latVel = approach(e.latVel, clamp((targetLat - e.lat) * 1.8, -6, 6), 12 * dt);
+    for (const o of this.list) {
+      if (o === e || !o.active || o.kind !== 'enemy_boat') continue;
+      if (Math.abs(o.dist - e.dist) < 6 && Math.abs(o.lat - e.lat) < 3) e.lat -= Math.sign(o.lat - e.lat || 1) * dt * 4;
+    }
+    e.dist += e.speed * dt;
+    e.lat = clamp(e.lat + e.latVel * dt, lo - 1, hi);
+    const dd = e.dist - p.dist;
+    const dl = e.lat - p.lat;
+    if (p.boatMode && !p.dead && e.hitCd <= 0 && Math.abs(dd) < e.def.halfL + p.halfLength * 0.9 && Math.abs(dl) < e.def.halfW + p.halfWidth) {
+      e.hitCd = 0.6;
+      e.lat += Math.sign(dl || 1) * 1.5;
+      this.damage(e, 25 * p.stats.ramMult, ctx);
+      ctx.damagePlayer(5, 0.25);
+      audio.hit();
+    }
+    if (!e.alive) return;
+    this.updateFiring(e, dt, ctx, dd, dl);
+    e.heading = ctx.track.sample(e.dist, e.lat, e.worldPos);
+    const bob = Math.sin(ctx.time * 3 + e.seed);
+    e.worldPos.y = -0.45 + bob * 0.07;
+    e.obj.position.copy(e.worldPos);
+    e.obj.rotation.set(0, e.heading - Math.atan2(e.latVel, Math.max(6, e.speed)), 0);
+    e.obj.rotateX(-0.06 + bob * 0.03);
+    e.pop = damp(e.pop, 0, 12, dt);
+    e.obj.scale.setScalar(1 + e.pop * 0.08);
+    e.aimPos.copy(e.worldPos).y += 1.1;
+    if (Math.random() < 0.35) {
+      this.tmp.set(Math.sin(e.heading) * 2.8, 0, Math.cos(e.heading) * 2.8).add(e.worldPos).setY(-0.1);
+      ctx.fx.puff(this.tmp, sv(rand(-1, 1), 1.2, rand(-1, 1)), 0.45, 0.6, 0xffffff);
+    }
+  }
+
   spawnChopper(ctx: GameCtx): void {
     const c = this.chopper;
     if (c.active) return;
@@ -286,6 +357,10 @@ export class EnemyManager {
       if (e.dist < p.dist - 110 || e.dist < track.backDist + 1 || e.dist > track.frontDist - 2) {
         e.active = false;
         e.obj.visible = false;
+        continue;
+      }
+      if (e.kind === 'enemy_boat') {
+        this.updateBoat(e, dt, ctx);
         continue;
       }
       const wall = track.wallAt(e.dist) - 1.0;
@@ -404,6 +479,7 @@ export class EnemyManager {
     }
     const inRange = e.kind === 'enemy_bike'
       ? Math.abs(dd) < 7 && Math.abs(dl) < e.def.range
+      : e.kind === 'enemy_boat' ? Math.abs(dd) < e.def.range && Math.abs(dl) < 22
       : Math.abs(dd) < e.def.range && Math.abs(dl) < 14;
     e.fireT -= dt;
     if (e.fireT <= 0) {

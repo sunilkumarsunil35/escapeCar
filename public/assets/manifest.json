@@ -191,6 +191,16 @@
           4.15
         ]
       }
+    },
+    "enemy_boat": {
+      "url": null,
+      "scale": 1.0,
+      "rotationY": 0,
+      "collider": [
+        2.4,
+        1.2,
+        5.2
+      ]
     }
   },
   "weapons": {
@@ -261,6 +271,11 @@
       "rotationY": 0
     },
     "powerup_magnet": {
+      "url": null,
+      "scale": 1.0,
+      "rotationY": 0
+    },
+    "powerup_boat": {
       "url": null,
       "scale": 1.0,
       "rotationY": 0

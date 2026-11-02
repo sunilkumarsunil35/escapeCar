@@ -52,7 +52,7 @@ export function defaultSave(): SaveData {
     bestTime: 0,
     bestScore: 0,
     mode: 'city',
-    bestTimes: { city: 0, desert: 0, forest: 0 },
+    bestTimes: { city: 0, desert: 0, forest: 0, beach: 0 },
     ownedCars: ['car_sedan'],
     car: 'car_sedan',
     ownedPaints: { car_sedan: [FACTORY_PAINT.car_sedan], car_tuner: [FACTORY_PAINT.car_tuner], car_truck: [FACTORY_PAINT.car_truck] },
@@ -95,8 +95,8 @@ export class SaveStore {
         settings: { ...base.settings, ...(parsed.settings ?? {}) },
         ownedPaints: { ...base.ownedPaints, ...(parsed.ownedPaints ?? {}) },
         paint: { ...base.paint, ...(parsed.paint ?? {}) },
-        mode: parsed.mode === 'desert' || parsed.mode === 'forest' ? parsed.mode : 'city',
-        bestTimes: { city: parsed.bestTime ?? 0, desert: 0, forest: 0, ...(parsed.bestTimes ?? {}) },
+        mode: parsed.mode === 'desert' || parsed.mode === 'forest' || parsed.mode === 'beach' ? parsed.mode : 'city',
+        bestTimes: { city: parsed.bestTime ?? 0, desert: 0, forest: 0, beach: 0, ...(parsed.bestTimes ?? {}) },
       };
     } catch {
       return base;

@@ -2,10 +2,12 @@ import * as THREE from 'three';
 import type { Engine } from '../core/Engine';
 import { FIXED_DT, PhysicsWorld } from '../core/Physics';
 import type { AssetRegistry } from '../assets/AssetRegistry';
-import { buildMesaRing, buildPineRing, buildSkyline } from '../assets/procedural/environment';
+import { buildIslandRing, buildMesaRing, buildPineRing, buildSkyline } from '../assets/procedural/environment';
+import { buildPlayerBoat } from '../assets/procedural/items';
+import { BeachLife } from './Beach';
 import type { InputManager, FrameInput } from '../input/Input';
 import type { PeerHost } from '../input/PeerHost';
-import { MODES, NEAR_MISS_BONUS, NITRO_MAX_CHARGES, POWERUPS, heatLevelsFor, type HeatDef, type ModeDef, type ModeId, type PowerupId } from '../data/config';
+import { BEACH, MODES, NEAR_MISS_BONUS, NITRO_MAX_CHARGES, POWERUPS, heatLevelsFor, type HeatDef, type ModeDef, type ModeId, type PowerupId } from '../data/config';
 import { damp, rand } from '../core/math';
 import { audio } from '../core/Audio';
 import { Track, type TrackPoint } from './Track';
@@ -40,11 +42,14 @@ export interface RunResult {
   modeBonus: number;
   mode: ModeId;
   squashed: boolean;
+  /** How the run ended. */
+  cause: WreckReason;
   total: number;
   score: number;
 }
 
 type State = 'idle' | 'playing' | 'paused' | 'wrecking';
+export type WreckReason = 'crash' | 'squash' | 'fall' | 'sink';
 
 const NEUTRAL: FrameInput = { steer: 0, drift: false, shoot: false, gadget: false, reverse: false, recenter: false, gadgetPressed: false, nitroPressed: false, brake: false, source: 'keyboard' };
 const WRECK_REAL_SECONDS = 2.0;
@@ -74,7 +79,17 @@ export class Game implements GameCtx {
   state: State = 'idle';
   private acc = 0;
   private wreckT = 0;
-  private wreckReason: 'crash' | 'squash' = 'crash';
+  private wreckReason: WreckReason = 'crash';
+  private islands: THREE.Group;
+  private boat: THREE.Group;
+  private beach: BeachLife;
+  /** Beach mode: banked Boat Kits (max 1) and the running boat timer. */
+  boatKits = 0;
+  private boatT = 0;
+  private boatWarned = false;
+  private boatPop = 0;
+  private lastWaterWarn = -99;
+  private boatBadge: HTMLDivElement;
   private runCash = 0;
   private nearMissCash = 0;
   private vibeAcc = 0;
@@ -104,6 +119,10 @@ export class Game implements GameCtx {
     this.mesas = buildMesaRing();
     this.mesas.visible = false;
     this.scene.add(this.mesas);
+    this.islands = buildIslandRing();
+    this.islands.visible = false;
+    this.scene.add(this.islands);
+    this.beach = new BeachLife(this.scene);
     this.pines = buildPineRing();
     this.pines.visible = false;
     this.scene.add(this.pines);
@@ -116,6 +135,12 @@ export class Game implements GameCtx {
     this.ambient = new Ambient(this.scene, assets, engine.lowQuality);
     this.combat.ctx = this;
     this.hud = new Hud(uiRoot);
+    this.boat = buildPlayerBoat();
+    this.boat.visible = false;
+    this.player.root.add(this.boat);
+    this.boatBadge = document.createElement('div');
+    this.boatBadge.className = 'boat-badge hidden';
+    uiRoot.appendChild(this.boatBadge);
     this.hud.onPause = () => this.onPauseRequest?.();
     this.track.onChunkPlaced = (c, safe) => this.hazards.populate(c, safe);
     this.director.onHeatChange = (h) => this.onHeat(h);
@@ -130,7 +155,7 @@ export class Game implements GameCtx {
       if (!this.track.chunks.length) return;
       this.track.project(pos, this.player.dist - 8, camTp);
       // Stay clear of the wall line (and the coastal median barrier that sits just inside it).
-      const limit = camTp.wall - 1.6;
+      const limit = (camTp.lat > 0 && camTp.chunk.seaWall > 0 ? camTp.chunk.seaWall : camTp.wall) - 1.6;
       if (Math.abs(camTp.lat) > limit) {
         this.track.sample(camTp.dist, Math.sign(camTp.lat) * limit, camPos);
         pos.x = camPos.x;
@@ -223,6 +248,16 @@ export class Game implements GameCtx {
         this.player.nitro = def.duration;
         this.hud.showBanner('NITRO FULL · AUTO-BOOST!', 'nitro', 1.5);
         audio.boost(2);
+      }
+      return;
+    } else if (id === 'powerup_boat') {
+      if (this.boatKits < 1) {
+        this.boatKits = 1;
+        this.hud.showBanner('⚓ BOAT KIT READY', 'nitro', 1.6);
+        this.toast('Steer onto the beach and into the sea to become a boat (12 s)');
+      } else {
+        this.collectCash(150);
+        this.hud.showBanner('BOAT KIT +$150', 'nitro', 1.3);
       }
       return;
     } else if (id === 'powerup_magnet') {
@@ -328,6 +363,13 @@ export class Game implements GameCtx {
     this.hazards.rollersEnabled = this.mode.rollers;
     this.hazards.potholesEnabled = this.mode.potholes;
     this.hazards.cranesEnabled = this.mode.cranes;
+    this.hazards.beachEnabled = this.mode.beach;
+    this.beach.enabled = this.mode.beach;
+    this.beach.reset();
+    this.boatKits = 0;
+    this.boatT = 0;
+    this.boat.visible = false;
+    this.lastWaterWarn = -99;
     this.ambient.reset();
     this.director.reset(levels);
     this.objectives.reset();
@@ -337,6 +379,8 @@ export class Game implements GameCtx {
     this.skyline.visible = biome === 'city' || biome === 'coastal';
     this.mesas.visible = biome === 'desert';
     this.pines.visible = biome === 'forest';
+    this.islands.visible = biome === 'beach';
+    this.boatBadge.classList.toggle('hidden', !this.mode.beach);
     this.player.spawn(loadout);
     this.player.rampHandles = new Set(this.hazards.rampHandles());
     this.combat.reset(loadout);
@@ -385,6 +429,7 @@ export class Game implements GameCtx {
     this.state = 'idle';
     audio.stopEngine();
     this.hud.show(false);
+    this.boatBadge.classList.add('hidden');
     this.input.setTouchVisible(false);
     this.fx.clear();
   }
@@ -399,6 +444,90 @@ export class Game implements GameCtx {
   }
 
   /** Run over by a road roller: the car is flattened like a pancake and the run ends immediately. */
+  /**
+   * Beach mode amphibious logic. Entering the sea spends a banked Boat Kit and turns the car into
+   * a boat for BEACH.boatTime seconds; driving back out turns it into a car again. Reaching the
+   * water without a kit (or still being at sea when the timer runs out) sinks the car.
+   */
+  private updateBoatMode(dt: number): void {
+    const p = this.player;
+    if (!p.boatMode) {
+      if (p.lat > BEACH.waterFrom + 0.4) {
+        if (this.boatKits > 0) this.enterBoat();
+        else this.wreck('sink');
+      } else if (p.lat > BEACH.sandFrom + 3 && this.boatKits === 0 && this.time - this.lastWaterWarn > 5) {
+        this.lastWaterWarn = this.time;
+        this.toast('⚠ NO BOAT KIT — THE SEA WILL SINK YOU!', 'danger');
+      }
+      return;
+    }
+    this.boatT -= dt;
+    if (p.lat < BEACH.waterFrom - 1.0) this.exitBoat();
+    else if (this.boatT <= 0) this.wreck('sink');
+    else if (this.boatT < 4 && !this.boatWarned) {
+      this.boatWarned = true;
+      this.toast('⚓ BOAT KIT RUNNING OUT — GET TO THE ROAD!', 'danger');
+      audio.warning();
+    }
+  }
+
+  private enterBoat(): void {
+    const p = this.player;
+    this.boatKits--;
+    p.boatMode = true;
+    this.boatT = BEACH.boatTime;
+    this.boatWarned = false;
+    this.boatPop = 1;
+    this.splashAt(p.renderPos);
+    audio.splash();
+    audio.powerup();
+    this.hud.showBanner('⚓ BOAT MODE!', 'nitro', 1.4);
+  }
+
+  private exitBoat(): void {
+    const p = this.player;
+    p.boatMode = false;
+    this.boatT = 0;
+    this.boatPop = 1;
+    this.splashAt(p.renderPos);
+    audio.splash();
+    this.hud.showBanner('BACK ON WHEELS', 'nitro', 1.2);
+  }
+
+  private splashAt(at: THREE.Vector3): void {
+    for (let i = 0; i < 14; i++) this.fx.puff(at.clone().setY(0).add(new THREE.Vector3(rand(-1.5, 1.5), 0, rand(-2, 2))), new THREE.Vector3(rand(-3, 3), rand(2, 5), rand(-3, 3)), 0.6, 0.7, i % 2 ? 0xffffff : 0x9fe3f0);
+  }
+
+  /** Swaps car/boat models, bobs the boat, sprays a wake and keeps the Boat Kit badge current. */
+  private updateBoatVisual(dt: number): void {
+    const p = this.player;
+    const boat = p.boatMode;
+    this.boat.visible = boat;
+    if (!p.stuck) p.model.visible = !boat;
+    this.boatPop = damp(this.boatPop, 0, 6, dt);
+    if (boat) {
+      const t = this.director.time;
+      this.boat.position.set(0, -0.62 + Math.sin(t * 3.1) * 0.06, 0);
+      this.boat.rotation.set(Math.sin(t * 2.2) * 0.03, 0, Math.sin(t * 2.7) * 0.04);
+      this.boat.scale.setScalar(1 + this.boatPop * 0.25);
+      if (p.speed > 6 && Math.random() < 0.6) {
+        const back = new THREE.Vector3(Math.sin(p.yaw) * 2.8, -0.1, Math.cos(p.yaw) * 2.8).add(p.renderPos).setY(-0.1);
+        this.fx.puff(back, new THREE.Vector3(rand(-1.5, 1.5), 1.5, rand(-1.5, 1.5)), 0.5, 0.6, 0xffffff);
+      }
+    } else p.model.scale.setScalar(p.squashed ? p.model.scale.x : 1 + this.boatPop * 0.2);
+    if (this.state !== 'playing') return;
+    const b = this.boatBadge;
+    const low = boat && this.boatT < 4;
+    b.className = `boat-badge ${boat ? (low ? 'active low' : 'active') : this.boatKits > 0 ? 'ready' : 'none'}`;
+    b.textContent = boat ? `⚓ BOAT ${Math.ceil(this.boatT)}s — back to the road!` : this.boatKits > 0 ? '⚓ BOAT KIT READY — steer into the sea' : '⚓ NO BOAT KIT — stay out of the water';
+  }
+
+  fallPlayer(): void {
+    if (this.state !== 'playing') return;
+    this.player.hp = 0;
+    this.wreck('fall');
+  }
+
   squashPlayer(): void {
     if (this.state !== 'playing') return;
     this.player.squashed = true;
@@ -406,7 +535,7 @@ export class Game implements GameCtx {
     this.wreck('squash');
   }
 
-  private wreck(reason: 'crash' | 'squash' = 'crash'): void {
+  private wreck(reason: WreckReason = 'crash'): void {
     if (this.state !== 'playing') return;
     this.state = 'wrecking';
     this.wreckT = WRECK_REAL_SECONDS;
@@ -416,6 +545,24 @@ export class Game implements GameCtx {
     this.combat.target = null;
     this.fx.setReticle(null, this.camera, 1);
     this.input.setTouchVisible(false);
+    if (reason === 'fall' || reason === 'sink') {
+      const pl = this.player;
+      pl.stuck = true;
+      pl.boatMode = false;
+      this.boat.visible = false;
+      pl.model.visible = true;
+      const p = pl.renderPos.clone().setY(0);
+      for (let i = 0; i < 16; i++) this.fx.puff(p.clone().add(new THREE.Vector3(rand(-1.5, 1.5), 0, rand(-2, 2))), new THREE.Vector3(rand(-3, 3), rand(3, 7), rand(-3, 3)), 0.7, 0.9, i % 2 ? 0xffffff : 0x9fe3f0);
+      this.rig.shake(0.5);
+      this.host.vibrate(450);
+      navigator.vibrate?.(350);
+      audio.splash();
+      audio.stopEngine();
+      audio.setMusicIntensity(0.5);
+      this.boatBadge.classList.add('hidden');
+      this.hud.showBanner(reason === 'fall' ? 'F E L L &nbsp; I N !' : 'S U N K !', 'wrecked', 3);
+      return;
+    }
     if (reason === 'squash') {
       const p = this.player.renderPos.clone().setY(0.4);
       for (let i = 0; i < 8; i++) this.fx.puff(p.clone().add(new THREE.Vector3(rand(-1.8, 1.8), 0, rand(-2.2, 2.2))), new THREE.Vector3(rand(-5, 5), rand(0.3, 1.2), rand(-5, 5)), 0.55, 0.8, 0xc9a777);
@@ -463,6 +610,7 @@ export class Game implements GameCtx {
       modeBonus,
       mode: this.mode.id,
       squashed: this.wreckReason === 'squash',
+      cause: this.wreckReason,
       total,
       score: Math.round(this.director.time * 10 + this.combat.kills * 50 + total),
     };
@@ -505,17 +653,20 @@ export class Game implements GameCtx {
     this.player.dist = this.tp.dist;
     this.player.lat = this.tp.lat;
     this.player.trackHeading = this.tp.heading;
-    this.player.wall = this.tp.wall;
-    const scraping = Math.abs(this.tp.lat) > this.tp.wall - this.player.lateralExtent() - 0.35;
+    // Beach chunks keep the land-side wall but open the sea side out to the far sea wall.
+    const sideWall = this.tp.lat > 0 && this.tp.chunk.seaWall > 0 ? this.tp.chunk.seaWall : this.tp.wall;
+    this.player.wall = sideWall;
+    const scraping = Math.abs(this.tp.lat) > sideWall - this.player.lateralExtent() - 0.35;
     this.player.scraping = scraping;
     if (scraping && this.state === 'playing') audio.scrape();
-    if (Math.abs(this.tp.lat) > this.tp.wall + 3) {
+    if (Math.abs(this.tp.lat) > sideWall + 3) {
       // Safety net: never let the car escape the road corridor.
       const pos = new THREE.Vector3();
-      this.track.sample(this.tp.dist, Math.sign(this.tp.lat) * (this.tp.wall - 2), pos);
+      this.track.sample(this.tp.dist, Math.sign(this.tp.lat) * (sideWall - 2), pos);
       this.player.teleportTo(pos.x, pos.z, this.tp.heading);
     }
     this.track.update(this.player.dist);
+    if (this.mode.beach && this.state === 'playing') this.updateBoatMode(sdt);
 
     if (!wrecking) {
       this.director.update(sdt, this);
@@ -525,14 +676,17 @@ export class Game implements GameCtx {
     this.enemies.update(sdt, this);
     this.hazards.update(sdt, this);
     this.ambient.update(sdt, this);
+    this.beach.update(sdt, this);
     this.combat.update(sdt, wrecking ? NEUTRAL : input, this);
     this.player.updateVisual(alpha, sdt, this.fx);
+    if (this.mode.beach) this.updateBoatVisual(dt);
     this.fx.update(sdt);
     this.rig.update(this.player, wrecking ? dt : sdt, wrecking, dt);
     this.lighting.update(sdt, this.player.renderPos, this.camera);
     this.skyline.position.set(this.camera.position.x, 0, this.camera.position.z);
     this.mesas.position.set(this.camera.position.x, 0, this.camera.position.z);
     this.pines.position.set(this.camera.position.x, 0, this.camera.position.z);
+    this.islands.position.set(this.camera.position.x, 0, this.camera.position.z);
     this.updateHeadlight();
     this.updateThreats();
 
@@ -553,7 +707,13 @@ export class Game implements GameCtx {
 
     if (wrecking) {
       this.wreckT -= dt;
-      if (this.wreckReason === 'squash') {
+      if (this.wreckReason === 'fall' || this.wreckReason === 'sink') {
+        const pl = this.player;
+        const fall = this.wreckReason === 'fall';
+        pl.sink = damp(pl.sink, fall ? 3.4 : 1.7, fall ? 2.2 : 1.2, dt);
+        pl.sinkTilt = damp(pl.sinkTilt, fall ? -0.85 : -0.25, fall ? 3 : 1.5, dt);
+        if (Math.random() < 0.3) this.fx.puff(pl.renderPos.clone().setY(-0.1).add(new THREE.Vector3(rand(-1, 1), 0, rand(-1.5, 1.5))), new THREE.Vector3(0, 1.4, 0), 0.3, 0.6, 0xe0f7fb);
+      } else if (this.wreckReason === 'squash') {
         if (Math.random() < 0.15) this.fx.puff(this.player.renderPos.clone().setY(0.3), new THREE.Vector3(rand(-1, 1), 0.8, rand(-1, 1)), 0.8, 1.2, 0xc9a777);
       } else {
       this.player.model.rotation.z = damp(this.player.model.rotation.z, 2.7, 1.5, sdt * 5);

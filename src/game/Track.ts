@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { RAPIER, type PhysicsWorld } from '../core/Physics';
-import { ROAD, type Biome } from '../data/config';
+import { ROAD, type Biome, BEACH } from '../data/config';
 import { buildChunkTemplate, chunkTurn, CURVE_TURN, sampleLocal, type ChunkKind } from '../assets/procedural/environment';
 import type { AssetRegistry } from '../assets/AssetRegistry';
 import { chance, pick } from '../core/math';
@@ -27,6 +27,8 @@ export class Chunk {
   readonly p0 = new THREE.Vector3();
   h0 = 0;
   wall = ROAD.cityWall;
+  /** Beach chunks: the sea-side (positive lateral) wall sits far out in the water instead. */
+  seaWall = 0;
   readonly group = new THREE.Group();
   readonly visuals = new Map<string, THREE.Object3D>();
   colliders: RAPIER.Collider[] = [];
@@ -73,7 +75,7 @@ export class Track {
   chunks: Chunk[] = [];
   private pool: Chunk[] = [];
   private templates = new Map<string, THREE.Object3D>();
-  private templateKeys: Record<ChunkKind, string[]> = { straight: [], curveL: [], curveR: [], highway: [], desert: [], desertL: [], desertR: [], forest: [], forestL: [], forestR: [] };
+  private templateKeys: Record<ChunkKind, string[]> = { straight: [], curveL: [], curveR: [], highway: [], desert: [], desertL: [], desertR: [], forest: [], forestL: [], forestR: [], beach: [], beachL: [], beachR: [] };
   private wallBody: RAPIER.RigidBody;
   biome: Biome = 'city';
   onChunkPlaced: ((c: Chunk, safe: boolean) => void) | null = null;
@@ -123,6 +125,9 @@ export class Track {
     [81, 82, 83].forEach((seed) => add('forest', `forest_${seed}`, buildChunkTemplate('forest', seed)));
     [91, 92].forEach((seed) => add('forestL', `forestL_${seed}`, buildChunkTemplate('forestL', seed)));
     [101, 102].forEach((seed) => add('forestR', `forestR_${seed}`, buildChunkTemplate('forestR', seed)));
+    [111, 112, 113].forEach((seed) => add('beach', `beach_${seed}`, buildChunkTemplate('beach', seed)));
+    [121, 122].forEach((seed) => add('beachL', `beachL_${seed}`, buildChunkTemplate('beachL', seed)));
+    [131, 132].forEach((seed) => add('beachR', `beachR_${seed}`, buildChunkTemplate('beachR', seed)));
   }
 
   reset(biome: Biome = 'city'): void {
@@ -182,18 +187,20 @@ export class Track {
   private themed(kind: ChunkKind): ChunkKind {
     if (this.biome === 'desert') return kind === 'curveL' ? 'desertL' : kind === 'curveR' ? 'desertR' : 'desert';
     if (this.biome === 'forest') return kind === 'curveL' ? 'forestL' : kind === 'curveR' ? 'forestR' : 'forest';
+    if (this.biome === 'beach') return kind === 'curveL' ? 'beachL' : kind === 'curveR' ? 'beachR' : 'beach';
     return kind;
   }
 
   private place(c: Chunk, kind: ChunkKind, p0: THREE.Vector3, h0: number, startDist: number, safe: boolean): void {
     c.kind = kind;
-    c.biome = kind === 'highway' ? 'coastal' : kind.startsWith('desert') ? 'desert' : kind.startsWith('forest') ? 'forest' : 'city';
+    c.biome = kind === 'highway' ? 'coastal' : kind.startsWith('desert') ? 'desert' : kind.startsWith('forest') ? 'forest' : kind.startsWith('beach') ? 'beach' : 'city';
     c.turn = chunkTurn(kind);
     c.p0.copy(p0);
     c.p0.y = 0;
     c.h0 = h0;
     c.startDist = startDist;
     c.wall = kind === 'highway' ? ROAD.coastalWall : ROAD.cityWall;
+    c.seaWall = kind.startsWith('beach') ? BEACH.seaWall : 0;
     c.index = this.placedCount++;
     c.group.position.copy(c.p0);
     c.group.rotation.set(0, h0, 0);
@@ -217,7 +224,7 @@ export class Track {
     const a = new THREE.Vector3();
     const q = new THREE.Quaternion();
     for (const side of [-1, 1]) {
-      const lat = side * (c.wall + 0.5);
+      const lat = side > 0 && c.seaWall > 0 ? c.seaWall + 0.5 : side * (c.wall + 0.5);
       for (let i = 0; i < segs; i++) {
         const h = c.sample((i + 0.5) * ds, lat, a);
         const len = ds * (1 + Math.abs(lat * (c.turn / c.L))) + 0.4;

@@ -7,7 +7,7 @@ import {
   buildSedan, buildTuner, buildTruck, buildBike, buildChopper, buildOilPuddle, buildMine, buildDozer, type WheelStyle,
 } from './procedural/vehicles';
 import {
-  buildTommy, buildRocketPod, buildMissile, buildCash, buildWrench, buildNitro, buildMagnet, buildBarricade, buildBarrel, buildRamp, buildCone, buildRoadRoller,
+  buildTommy, buildRocketPod, buildMissile, buildCash, buildWrench, buildNitro, buildMagnet, buildBarricade, buildBarrel, buildRamp, buildCone, buildRoadRoller, buildGunboat, buildBoatKit,
 } from './procedural/items';
 import { buildChunkTemplate, buildGarage } from './procedural/environment';
 import { buildCivilian, buildPedestrian, TAXI_YELLOW } from './procedural/ambient';
@@ -49,6 +49,7 @@ export const DEFAULT_MANIFEST: Manifest = {
       url: null, scale: 1, rotationY: 0, collider: [2.0, 0.8, 4.2],
       sockets: { wheel_FL: [-0.86, 0.42, -1.3], wheel_FR: [0.86, 0.42, -1.3], wheel_RL: [-0.86, 0.42, 1.3], wheel_RR: [0.86, 0.42, 1.3] },
     },
+    enemy_boat: { url: null, scale: 1, rotationY: 0, collider: [2.4, 1.2, 5.2] },
     enemy_chopper: { url: null, scale: 1.5, rotationY: 0, collider: [3.0, 1.5, 6.0], sockets: { rotor_main: [0, 1.75, 0.1], rotor_tail: [0.22, 1.25, 4.15] } },
   },
   weapons: {
@@ -64,6 +65,7 @@ export const DEFAULT_MANIFEST: Manifest = {
     powerup_wrench: { url: null, scale: 1, rotationY: 0 },
     powerup_nitro: { url: null, scale: 1, rotationY: 0 },
     powerup_magnet: { url: null, scale: 1, rotationY: 0 },
+    powerup_boat: { url: null, scale: 1, rotationY: 0 },
   },
   environment: {
     road_straight: { url: null, length: 50, width: 20 },
@@ -257,6 +259,8 @@ export class AssetRegistry {
         return buildSedan(sockets, { body: 0x1b1c21, fender: 0x141519, glass: 0x0d1118, enemy: true }, 'whitewall');
       case 'enemy_bike':
         return buildBike();
+      case 'enemy_boat':
+        return buildGunboat();
       case 'enemy_chopper':
         return buildChopper(sockets);
       case 'weapon_tommy':
@@ -279,6 +283,8 @@ export class AssetRegistry {
         return buildNitro();
       case 'powerup_magnet':
         return buildMagnet();
+      case 'powerup_boat':
+        return buildBoatKit();
       case 'obstacle_barricade':
         return buildBarricade();
       case 'obstacle_barrel':

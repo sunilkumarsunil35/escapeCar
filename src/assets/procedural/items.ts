@@ -395,3 +395,110 @@ export function buildPothole(): THREE.Group {
 }
 
 const BARK2 = 0x5a3c26;
+
+
+/** The player's amphibious form: a speedboat with the roof gun on the foredeck. Faces -Z. */
+export function buildPlayerBoat(): THREE.Group {
+  const b = new GeoBuilder();
+  const hull = 0xf2efe6;
+  b.profile([[-1.15, 0], [-1.3, 0.75], [1.3, 0.75], [1.15, 0]], 4.6, hull, [0, 0, 0.3], { rot: [0, Math.PI / 2, 0] });
+  b.box(2.6, 0.75, 1.4, hull, [0, 0.37, -2.4], { scale: [0.55, 1, 1] });
+  b.box(2.62, 0.22, 4.7, 0xd62828, [0, 0.62, 0.3]);
+  b.box(2.3, 0.08, 4.2, 0x8a6a48, [0, 0.8, 0.4]);
+  b.box(2.0, 0.6, 0.12, 0x9ad1f5, [0, 1.15, -0.6], { layer: 'window', rot: [-0.45, 0, 0] });
+  b.box(0.8, 0.5, 0.8, 0xf2efe6, [-0.5, 1.05, 0.5]);
+  b.box(0.7, 0.9, 0.7, 0x2b2d33, [0, 0.9, 2.85]);
+  b.box(0.25, 0.7, 0.25, 0x2b2d33, [0, 0.25, 3.05]);
+  b.box(0.9, 0.35, 1.0, 0x3a3f47, [0, 1.0, -1.6]);
+  b.box(0.12, 0.12, 1.1, 0x1d1e22, [-0.18, 1.12, -2.3]);
+  b.box(0.12, 0.12, 1.1, 0x1d1e22, [0.18, 1.12, -2.3]);
+  const g = b.build({ castShadow: true });
+  g.name = 'player_boat';
+  return g;
+}
+
+/** Mafia gunboat: dark speedboat with a pintle machine gun. Faces -Z. */
+export function buildGunboat(): THREE.Group {
+  const root = new THREE.Group();
+  const b = new GeoBuilder();
+  const hull = 0x23262c;
+  b.profile([[-1.0, 0], [-1.2, 0.8], [1.2, 0.8], [1.0, 0]], 4.4, hull, [0, 0, 0.4], { rot: [0, Math.PI / 2, 0] });
+  b.box(2.4, 0.8, 1.4, hull, [0, 0.4, -2.3], { scale: [0.55, 1, 1] });
+  b.box(2.42, 0.18, 4.5, 0x8c2a1e, [0, 0.66, 0.4]);
+  b.box(2.0, 0.08, 4.0, 0x3a3f47, [0, 0.84, 0.4]);
+  b.box(1.8, 0.55, 0.1, 0x0d1118, [0, 1.15, -0.4], { rot: [-0.4, 0, 0] });
+  b.box(0.65, 0.85, 0.65, 0x1d1e22, [0, 0.85, 2.9]);
+  b.box(0.42, 0.55, 0.4, 0x2b2d33, [0.4, 1.15, 0.6]);
+  b.ico(0.17, 0xe0ac85, [0.4, 1.6, 0.6]);
+  b.cyl(0.22, 0.22, 0.08, 8, 0x111111, [0.4, 1.75, 0.6]);
+  b.box(0.08, 0.6, 0.08, 0x1d1e22, [0, 1.15, -1.2]);
+  b.box(0.18, 0.18, 1.2, 0x1d1e22, [0, 1.45, -1.6]);
+  root.add(b.build({ castShadow: true }));
+  const muzzle = new THREE.Object3D();
+  muzzle.name = 'muzzle';
+  muzzle.position.set(0, 1.45, -2.25);
+  root.add(muzzle);
+  root.name = 'enemy_boat';
+  return root;
+}
+
+/** Leaping fish (orange or silver), body along -Z. */
+export function buildFish(orange: boolean): THREE.Group {
+  const b = new GeoBuilder();
+  const col = orange ? 0xf28c38 : 0xb8c4cc;
+  b.ico(0.32, col, [0, 0, 0], { scale: [0.55, 0.8, 1.6] });
+  b.profile([[0, 0], [-0.32, 0.3], [-0.32, -0.3]], 0.05, orange ? 0xd9622b : 0x8d9aa3, [0, 0, 0.62], { rot: [0, Math.PI / 2, 0] });
+  b.box(0.04, 0.22, 0.3, orange ? 0xd9622b : 0x8d9aa3, [0, 0.27, 0.05]);
+  for (const x of [-0.15, 0.15]) b.ico(0.06, 0x111111, [x, 0.06, -0.36]);
+  const g = b.build();
+  g.name = 'fish';
+  return g;
+}
+
+/** Boat Kit power-up: anchor-stamped crate with a life ring. */
+export function buildBoatKit(): THREE.Group {
+  const b = new GeoBuilder();
+  b.box(1.1, 0.8, 0.8, 0x0e7490, [0, 0, 0]);
+  b.box(1.14, 0.1, 0.84, 0xf2efe6, [0, 0.25, 0]);
+  b.box(1.14, 0.1, 0.84, 0xf2efe6, [0, -0.25, 0]);
+  b.box(0.1, 0.42, 0.06, 0xffe066, [0, 0.0, -0.43]);
+  b.box(0.36, 0.08, 0.06, 0xffe066, [0, 0.12, -0.43]);
+  b.torus(0.16, 0.035, 6, 14, 0xffe066, [0, -0.16, -0.43], { rot: [0, 0, 0] }, Math.PI);
+  b.torus(0.42, 0.11, 6, 16, 0xf25f5c, [0, 0.55, 0], { rot: [Math.PI / 2, 0, 0] });
+  const g = b.build();
+  g.name = 'powerup_boat';
+  return g;
+}
+
+/**
+ * A washed-out section of road: a seawater-filled chasm across the whole road and beach with
+ * broken asphalt slabs on both lips. Local frame: X = track lateral, -Z = forward. `halfLen` is
+ * half the gap length along the road.
+ */
+export function buildRoadGap(latMin: number, latMax: number, halfLen: number): THREE.Group {
+  const b = new GeoBuilder();
+  const w = latMax - latMin;
+  const cx = (latMin + latMax) / 2;
+  b.box(w, 0.04, halfLen * 2, 0x0b3f57, [cx, 0.03, 0]);
+  b.box(w, 0.045, 0.7, 0x111418, [cx, 0.035, -halfLen + 0.35]);
+  b.box(w, 0.045, 0.7, 0x111418, [cx, 0.035, halfLen - 0.35]);
+  for (let i = 0; i < 9; i++) b.box(rr2(1.2, 3.5), 0.05, rr2(0.3, 0.7), 0xd8f3f7, [latMin + 1 + Math.random() * (w - 2), 0.06, rr2(-halfLen + 1.4, halfLen - 1.4)], { rot: [0, Math.random(), 0] });
+  for (const side of [-1, 1]) {
+    for (let x = latMin + 0.6; x < latMax - 0.4; x += rr2(1.4, 2.6)) {
+      const onRoad = x > -10 && x < 10;
+      b.box(rr2(1.2, 2.4), 0.3, rr2(0.6, 1.2), onRoad ? 0x5a5d62 : 0xcdb98a, [x, 0.02, side * (halfLen + 0.15)], { rot: [side * rr2(0.15, 0.4), rr2(-0.3, 0.3), rr2(-0.1, 0.1)] });
+      if (onRoad && Math.random() < 0.35) b.box(0.05, 0.05, 0.9, 0x8a4f2e, [x + 0.3, 0.15, side * (halfLen - 0.2)], { rot: [side * 0.6, 0, 0] });
+    }
+  }
+  // Warning signs on the land-side curb
+  for (const z of [halfLen + 14, halfLen + 34]) {
+    b.box(0.1, 1.8, 0.1, 0x8d8f94, [-11.4, 0.9, z]);
+    b.box(1.3, 1.3, 0.06, 0xf2c230, [-11.4, 2.1, z], { rot: [0, 0, Math.PI / 4] });
+    b.box(0.16, 0.6, 0.07, 0x1d1e22, [-11.4, 2.15, z]);
+  }
+  const g = b.build({ receiveShadow: true });
+  g.name = 'road_gap';
+  return g;
+}
+
+const rr2 = (a: number, b: number): number => a + Math.random() * (b - a);

@@ -7,6 +7,12 @@ import type { PeerHost, HostStatus } from '../input/PeerHost';
 import { stars } from './Hud';
 import { MODES } from '../data/config';
 
+const CAUSE: Record<string, string> = {
+  squash: 'FLATTENED BY A ROAD ROLLER',
+  fall: 'FELL INTO A BROKEN ROAD',
+  sink: 'SANK IN THE SEA',
+};
+
 /** Slide-in game-over summary (doc §6.4). */
 export class WreckedScreen {
   readonly el: HTMLDivElement;
@@ -44,7 +50,7 @@ export class WreckedScreen {
 
   show(r: RunResult, opts: { newBest: boolean; upgradeDot: boolean; name: string; global: boolean }): void {
     (this.el.querySelector('.w-sub') as HTMLElement).innerHTML =
-      `${r.squashed ? '<b class="squash">FLATTENED BY A ROAD ROLLER</b><br>' : ''}SURVIVED: <b>${formatTime(r.time)}</b> &nbsp;|&nbsp; MAX HEAT: <b class="stars">${stars(r.maxHeat)}</b>${opts.newBest ? ' &nbsp;<em>NEW BEST!</em>' : ''}`;
+      `${CAUSE[r.cause] ? `<b class="squash">${CAUSE[r.cause]}</b><br>` : ''}SURVIVED: <b>${formatTime(r.time)}</b> &nbsp;|&nbsp; MAX HEAT: <b class="stars">${stars(r.maxHeat)}</b>${opts.newBest ? ' &nbsp;<em>NEW BEST!</em>' : ''}`;
     (this.el.querySelector('.w-earn') as HTMLElement).innerHTML = `
       <h3>RUN EARNINGS</h3>
       <div><span>Distance Bonus (${Math.round(r.distance)} m)</span><b>+${formatCash(r.distanceBonus)}</b></div>

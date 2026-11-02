@@ -75,6 +75,13 @@ export class PlayerCar {
   dead = false;
   /** Flattened by a road roller: pancake squash-and-stretch on the model. */
   squashed = false;
+  /** Beach mode: amphibious boat form (visual swap, handled by Game). */
+  boatMode = false;
+  /** Wreck animation: how far the model has dropped / sunk, and its nose-down pitch. */
+  sink = 0;
+  sinkTilt = 0;
+  /** Stopped dead by a fall or sinking. */
+  stuck = false;
   private fxTimer = 0;
   private skidTimer = 0;
   onSparkTier: ((tier: number) => void) | null = null;
@@ -149,6 +156,10 @@ export class PlayerCar {
     this.magnet = 0;
     this.dead = false;
     this.squashed = false;
+    this.boatMode = false;
+    this.sink = 0;
+    this.sinkTilt = 0;
+    this.stuck = false;
     this.grounded = true;
     this.wasGrounded = true;
     this.airTime = 0;
@@ -246,7 +257,7 @@ export class PlayerCar {
   fixedUpdate(dt: number, input: FrameInput): void {
     if (this.dead) {
       const lv = this.body.linvel();
-      const k = this.squashed ? 0.6 : 0.97;
+      const k = this.squashed ? 0.6 : this.stuck ? 0.85 : 0.97;
       this.body.setLinvel({ x: lv.x * k, y: this.squashed ? Math.min(lv.y, 0) : lv.y, z: lv.z * k }, true);
       return;
     }
@@ -406,7 +417,8 @@ export class PlayerCar {
     const lean = clamp(-this.vL * 0.012 - this.steer * (this.grounded ? 0.05 : 0), -0.14, 0.14) + (this.drift.active ? -this.drift.dir * 0.05 : 0);
     this.roll = damp(this.roll, lean, 8, dt);
     this.hopVisual = damp(this.hopVisual, 0, 6, dt);
-    this.model.position.y = Math.max(0, this.hopVisual) * 0.08;
+    this.model.position.y = Math.max(0, this.hopVisual) * 0.08 - this.sink;
+    if (this.sinkTilt !== 0) this.model.rotation.x = this.sinkTilt;
     this.root.rotation.set(0, 0, 0);
     this.root.rotateY(this.yaw + this.visualDriftYaw);
     this.root.rotateX(-this.pitch);

@@ -255,7 +255,8 @@ export class GarageUI {
     const modeBtn = this.el.querySelector('.g-mode') as HTMLElement;
     modeBtn.classList.toggle('desert', d.mode === 'desert');
     modeBtn.classList.toggle('forest', d.mode === 'forest');
-    modeBtn.innerHTML = `<small>LOCATION ▾</small>${d.mode === 'desert' ? '🏜' : d.mode === 'forest' ? '🌲' : '🏙'} ${mode.name.toUpperCase()}<em>${mode.tagline}</em>`;
+    modeBtn.classList.toggle('beach', d.mode === 'beach');
+    modeBtn.innerHTML = `<small>LOCATION ▾</small>${d.mode === 'desert' ? '🏜' : d.mode === 'forest' ? '🌲' : d.mode === 'beach' ? '🏖' : '🏙'} ${mode.name.toUpperCase()}<em>${mode.tagline}</em>`;
     (this.el.querySelector('.g-pair') as HTMLElement).textContent = this.pairedLabel();
     (this.el.querySelector('.g-mute') as HTMLElement).textContent = d.muted ? '🔇' : '🔊';
     this.el.querySelectorAll<HTMLButtonElement>('.g-tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === this.tab));

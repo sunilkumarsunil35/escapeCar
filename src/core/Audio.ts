@@ -410,6 +410,12 @@ class AudioSynth {
     this.chime(scaleNote(4), 0.6, 0.08, { delay: 0.09 });
     this.chime(scaleNote(7), 0.9, 0.08, { delay: 0.18 });
   }
+  /** Big splash: falling into a broken road, sinking, or transforming between car and boat. */
+  splash(): void {
+    this.noise(0.7, 900, 0.8, 'lowpass');
+    this.noise(0.35, 2600, 0.3, 'bandpass', 2, { delay: 0.05 });
+  }
+
   /** Metal crunch for being flattened by a road roller. */
   squash(): void {
     this.duckMusic(0.15, 1.6);

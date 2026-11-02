@@ -106,6 +106,7 @@
       T.survived = +g.director.time.toFixed(1);
       T.distance = Math.round(p.dist);
       T.squashed = p.squashed;
+      T.cause = g.state === 'playing' ? null : g.wreckReason;
       T.cash = g.runCash + g.nearMissCash + g.objectives.objectiveCash + g.objectives.comboCash;
       T.objectives = g.objectives.completed;
       T.objectiveCash = g.objectives.objectiveCash;
@@ -138,7 +139,7 @@
         pctSecondsNoEnemyWithin30m: Math.round((T.secondsNoEnemyNear / Math.max(1, T.samples)) * 100),
         pctSecondsWithTarget: Math.round((T.secondsWithTarget / Math.max(1, T.samples)) * 100),
         damageTaken: Object.fromEntries(Object.entries(T.damage).map(([k, v]) => [k, Math.round(v)])), damageTotal: Math.round(dmgTotal),
-        stallSeconds: T.stallSeconds, squashed: T.squashed, cash: T.cash, chopperSeen: T.chopperSeen, killsByHeat: T.killsByHeat,
+        stallSeconds: T.stallSeconds, squashed: T.squashed, cause: T.cause, cash: T.cash, chopperSeen: T.chopperSeen, killsByHeat: T.killsByHeat,
         objectivesDone: T.objectives, objectiveCash: T.objectiveCash, comboCash: T.comboCash, bestCombo: T.bestCombo,
       };
     });

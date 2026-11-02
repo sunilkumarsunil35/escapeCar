@@ -31,6 +31,8 @@ export interface GameCtx {
   nearMiss(): void;
   /** Run over by a road roller: flattened car, instant game over. */
   squashPlayer(): void;
+  /** Drove into a broken road without jumping: falls in, instant game over. */
+  fallPlayer(): void;
   reportEvent(type: GameEvent, amount?: number): void;
   shake(amount: number): void;
   /** Layered juice scaled by importance: shake + hit-stop + flash (game-feel tiers). */

@@ -4,11 +4,11 @@ import { C } from '../../core/Palette';
 import { mulberry32 } from '../../core/math';
 import { ROAD } from '../../data/config';
 
-export type ChunkKind = 'straight' | 'curveL' | 'curveR' | 'highway' | 'desert' | 'desertL' | 'desertR' | 'forest' | 'forestL' | 'forestR';
+export type ChunkKind = 'straight' | 'curveL' | 'curveR' | 'highway' | 'desert' | 'desertL' | 'desertR' | 'forest' | 'forestL' | 'forestR' | 'beach' | 'beachL' | 'beachR';
 export const CURVE_TURN = Math.PI / 4; // 45° per curved chunk
 
 export function chunkTurn(kind: ChunkKind): number {
-  return kind === 'curveL' || kind === 'desertL' || kind === 'forestL' ? CURVE_TURN : kind === 'curveR' || kind === 'desertR' || kind === 'forestR' ? -CURVE_TURN : 0;
+  return kind === 'curveL' || kind === 'desertL' || kind === 'forestL' || kind === 'beachL' ? CURVE_TURN : kind === 'curveR' || kind === 'desertR' || kind === 'forestR' || kind === 'beachR' ? -CURVE_TURN : 0;
 }
 
 /** Local-frame centerline sample for a chunk that starts at the origin heading -Z. */
@@ -837,6 +837,138 @@ export function buildPineRing(seed = 31): THREE.Group {
   return group;
 }
 
+/** Lays a water-layer band (animated shader) between two lateral offsets, following the chunk curve. */
+function waterStrip(b: GeoBuilder, turn: number, L: number, latA: number, latB: number, y: number, color: number, segs: number): void {
+  const k = Math.abs(turn / L);
+  const ds = L / segs;
+  const latMid = (latA + latB) / 2;
+  const width = Math.abs(latB - latA);
+  const len = ds * (1 + Math.abs(latMid) * k) + 0.2;
+  for (let i = 0; i < segs; i++) {
+    b.frame = frameAt((i + 0.5) * ds, latMid, turn, L);
+    b.add(new THREE.PlaneGeometry(width, len, Math.max(2, Math.ceil(width / 4.5)), 4), color, [0, y, 0], { rot: [-Math.PI / 2, 0, 0], layer: 'water' });
+  }
+  b.frame = null;
+}
+
+const HUTS = [0xf4a259, 0x5bc0be, 0xf25f5c, 0xffe066, 0x70c1b3];
+
+/** Seaside road: open beach and surf on the right (the boat route), dunes, palms and beach huts on the left. */
+function beachRoad(b: GeoBuilder, rng: Rng, turn: number, L: number, variant: number): void {
+  const segs = turn === 0 ? 1 : 10;
+  const wsegs = turn === 0 ? 1 : 12;
+  strip(b, turn, L, -ROAD.halfWidth, ROAD.halfWidth, 0, 0.3, 0x5a5d62, segs);
+  for (const lat of [-5, 5]) dashes(b, turn, L, lat, 0xf2efe6, 3, 5, 0.17);
+  solidLine(b, turn, L, -0.15, 0xe8c53a, 0.13);
+  solidLine(b, turn, L, 0.15, 0xe8c53a, 0.13);
+  for (const lat of [-9.6, 9.6]) solidLine(b, turn, L, lat, 0xf2efe6, 0.2);
+  for (let i = 0; i < 3; i++) {
+    b.frame = frameAt(rr(rng, 3, L - 3), rr(rng, 4, 9.6), turn, L);
+    b.box(rr(rng, 1.5, 3), 0.015, rr(rng, 2, 4), 0xd9c497, [0, 0.008, 0], { rot: [0, rng(), 0] });
+  }
+  b.frame = null;
+  // Land side: boardwalk, low stone sea wall, dunes
+  strip(b, turn, L, -10, -12.6, -0.02, 0.3, 0xa07a50, segs);
+  for (let s = 1; s < L; s += 2.2) {
+    b.frame = frameAt(s, -11.3, turn, L);
+    b.box(2.6, 0.02, 0.08, 0x7a5a38, [0, -0.01, 0]);
+  }
+  b.frame = null;
+  strip(b, turn, L, -12.6, -13.6, 0.75, 0.8, 0xcfc6b4, segs);
+  strip(b, turn, L, -13.6, -90, -0.06, 0.3, 0xe2cf9c, segs);
+  // Sea side: dry sand -> wet sand -> foam -> shallow turquoise -> deep blue
+  strip(b, turn, L, 10, 16.5, -0.06, 0.3, 0xead9a8, segs);
+  strip(b, turn, L, 16.5, 19.2, -0.12, 0.3, 0xcdb98a, segs);
+  waterStrip(b, turn, L, 18.6, 19.8, -0.2, 0xf4fbff, wsegs);
+  waterStrip(b, turn, L, 19.8, 42, -0.28, 0x35c4cf, wsegs);
+  waterStrip(b, turn, L, 42, 110, -0.34, 0x1e96cf, wsegs);
+  waterStrip(b, turn, L, 110, 320, -0.4, 0x15629f, turn === 0 ? 1 : 8);
+  // Flat beach clutter only (the sand is a driving lane)
+  for (let i = 0; i < 5; i++) {
+    b.frame = frameAt(rr(rng, 2, L - 2), rr(rng, 11, 17.5), turn, L, rng() * 6);
+    const t = rng();
+    if (t < 0.4) b.box(0.9, 0.02, 1.8, rpick(rng, HUTS), [0, -0.05, 0]);
+    else if (t < 0.7) b.ico(0.18, 0xf28c38, [0, -0.04, 0], { scale: [1.4, 0.25, 1.4] });
+    else b.box(rr(rng, 0.6, 1.4), 0.03, 0.12, 0x6b8a3a, [0, -0.05, 0], { rot: [0, rng(), 0] });
+  }
+  for (let i = 0; i < 6; i++) {
+    b.frame = frameAt(rr(rng, 0, L), rr(rng, 24, 100), turn, L, rng() * 6);
+    b.box(rr(rng, 2, 6), 0.02, rr(rng, 0.3, 0.7), 0xffffff, [0, -0.25, 0], { layer: 'water' });
+  }
+  // Palms and dune grass on the land side
+  for (let i = 0; i < 7; i++) {
+    b.frame = frameAt(rr(rng, 1, L - 1), -rr(rng, 15, 34), turn, L, rng() * 6, -0.06);
+    if (rng() < 0.6) palm(b, rng, 0, 0);
+    else b.ico(rr(rng, 0.4, 0.8), rpick(rng, [0x9bb35a, 0x7ea04a]), [0, 0.2, 0], { scale: [1.6, 0.5, 1.2] });
+  }
+  b.defaultLayer = 'far';
+  for (let i = 0; i < 3; i++) {
+    b.frame = frameAt(rr(rng, 0, L), -rr(rng, 40, 85), turn, L, 0, -0.06);
+    b.ico(rr(rng, 8, 16), rpick(rng, [0xe2cf9c, 0xd8c08a]), [0, -1.5, 0], { scale: [1.6, 0.3, 1] });
+  }
+  b.defaultLayer = 'lit';
+  // Beach huts on stilts (straight chunks only, away from the road)
+  if (turn === 0) {
+    for (let i = 0; i < 2; i++) {
+      b.frame = frameAt(8 + i * 25 + rr(rng, -3, 3), -rr(rng, 19, 24), turn, L, Math.PI / 2, -0.06);
+      const col = rpick(rng, HUTS);
+      for (const x of [-1.8, 1.8]) for (const z of [-1.6, 1.6]) b.box(0.18, 1.4, 0.18, 0x7a5a38, [x, 0.7, z]);
+      b.box(4.2, 2.6, 3.8, col, [0, 2.7, 0]);
+      b.box(4.8, 0.2, 4.4, 0xf2efe6, [0, 4.1, 0], { rot: [0, 0, 0.12] });
+      b.box(1.0, 1.6, 0.06, 0x2b3440, [0, 2.4, -1.93]);
+      b.box(1.4, 0.7, 0.06, 0x9ad1f5, [-1.2, 3.0, -1.93], { layer: 'window' });
+    }
+  }
+  if (variant === 0 && turn === 0) {
+    // Lifeguard tower on the land side
+    b.frame = frameAt(30, -17, turn, L, Math.PI / 2, -0.06);
+    for (const x of [-0.9, 0.9]) for (const z of [-0.9, 0.9]) b.box(0.14, 2.6, 0.14, 0xf2efe6, [x, 1.3, z]);
+    b.box(2.4, 1.5, 2.2, 0xd62828, [0, 3.3, 0]);
+    b.box(2.0, 0.6, 0.06, 0x9ad1f5, [0, 3.5, -1.12], { layer: 'window' });
+    b.box(2.8, 0.15, 2.6, 0xf2efe6, [0, 4.15, 0]);
+  } else if (variant === 1) {
+    // Sailboats offshore
+    b.defaultLayer = 'far';
+    for (let i = 0; i < 2; i++) {
+      b.frame = frameAt(rr(rng, 5, L - 5), rr(rng, 70, 160), turn, L, rng() * 6, -0.4);
+      b.box(3.2, 0.6, 1.0, 0xf2efe6, [0, 0.1, 0]);
+      b.box(0.08, 4, 0.08, 0x7a5a38, [0, 2.4, 0]);
+      b.box(0.04, 3.4, 1.8, 0xffffff, [0, 2.6, 0.9]);
+    }
+    b.defaultLayer = 'lit';
+  } else if (variant === 2 && turn === 0) {
+    // Striped lighthouse on a rocky point
+    b.defaultLayer = 'far';
+    b.frame = frameAt(25, -60, turn, L, 0, -0.06);
+    b.ico(7, 0x8d8f94, [0, 0, 0], { scale: [1.3, 0.5, 1.1] });
+    for (let i = 0; i < 6; i++) b.cyl(1.8 - i * 0.12, 1.9 - i * 0.12, 2.6, 10, i % 2 ? 0xd62828 : 0xf2efe6, [0, 3 + i * 2.6, 0]);
+    b.cyl(1.2, 1.2, 1.4, 10, 0xffe8a0, [0, 19.2, 0], { layer: 'glow' });
+    b.cone(1.5, 1.6, 10, 0x2b2d33, [0, 20.7, 0]);
+    b.defaultLayer = 'lit';
+  }
+  b.frame = null;
+}
+
+/** Distant palm islands ringing the horizon (replaces the city skyline in beach mode). */
+export function buildIslandRing(seed = 41): THREE.Group {
+  const rng = mulberry32(seed);
+  const b = new GeoBuilder();
+  const count = 26;
+  for (let i = 0; i < count; i++) {
+    const a = (i / count) * Math.PI * 2 + rr(rng, -0.08, 0.08);
+    const r = rr(rng, 250, 330);
+    b.frame = new THREE.Matrix4().makeRotationY(-a).setPosition(Math.cos(a) * r, 0, Math.sin(a) * r);
+    b.ico(rr(rng, 18, 40), 0x6a8f5a, [0, -6, 0], { scale: [1.8, 0.45, 1.2] });
+    for (let k = 0; k < 4; k++) b.cone(rr(rng, 4, 7), rr(rng, 10, 22), 6, 0x4f7a4a, [rr(rng, -20, 20), rr(rng, 6, 12), rr(rng, -6, 6)]);
+  }
+  b.frame = null;
+  const group = new THREE.Group();
+  group.name = 'island_ring';
+  const body = b.buildGeometry('lit');
+  if (body) group.add(new THREE.Mesh(body, SKYLINE_MATS.body));
+  return group;
+}
+
 /** Builds the visual template for a chunk in local space (start at origin, heading -Z). */
 export function buildChunkTemplate(kind: ChunkKind, seed: number): THREE.Group {
   const rng = mulberry32(seed);
@@ -845,6 +977,7 @@ export function buildChunkTemplate(kind: ChunkKind, seed: number): THREE.Group {
   if (kind === 'highway') coastalHighway(b, rng, L, seed % 3);
   else if (kind === 'desert' || kind === 'desertL' || kind === 'desertR') desertRoad(b, rng, chunkTurn(kind), L, seed % 3);
   else if (kind === 'forest' || kind === 'forestL' || kind === 'forestR') forestRoad(b, rng, chunkTurn(kind), L, seed % 3);
+  else if (kind === 'beach' || kind === 'beachL' || kind === 'beachR') beachRoad(b, rng, chunkTurn(kind), L, seed % 3);
   else cityStreet(b, rng, chunkTurn(kind), L);
   const g = b.build({ castShadow: true, receiveShadow: true });
   g.name = `chunk_${kind}`;

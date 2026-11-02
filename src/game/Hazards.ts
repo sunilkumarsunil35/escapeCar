@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { RAPIER, type PhysicsWorld } from '../core/Physics';
-import { MAGNET_RADIUS, PICKUP_CASH_VALUE, POWERUPS, ROAD, type HeatDef, type PowerupId } from '../data/config';
+import { BEACH, MAGNET_RADIUS, PICKUP_CASH_VALUE, POWERUPS, ROAD, type HeatDef, type PowerupId } from '../data/config';
 import { chance, clamp, damp, pick, rand } from '../core/math';
 import { glowMat } from '../core/Palette';
 import type { AssetRegistry } from '../assets/AssetRegistry';
-import { buildCraneGantry, buildCraneLoad, buildPothole, rampHullPoints } from '../assets/procedural/items';
+import { buildCraneGantry, buildCraneLoad, buildPothole, buildRoadGap, rampHullPoints } from '../assets/procedural/items';
 import type { Track, Chunk } from './Track';
 import type { GameCtx } from './types';
 import { audio } from '../core/Audio';
@@ -27,6 +27,15 @@ interface CraneGate {
   big: THREE.Group;
   small: [THREE.Group, THREE.Group];
   pos: THREE.Vector3;
+}
+
+/** A washed-out stretch of beach road; only a ramp jump (or a boat) gets you across. */
+interface RoadGap {
+  active: boolean;
+  dist: number;
+  obj: THREE.Group;
+  lanes: number[];
+  warned: boolean;
 }
 
 /** Half of the drivable corridor the crane loads move in (forest chunks use the city wall). */
@@ -116,6 +125,10 @@ export class HazardManager {
   private potholes: Hazard[] = [];
   private gates: CraneGate[] = [];
   potholesEnabled = false;
+  beachEnabled = false;
+  private gaps: RoadGap[] = [];
+  /** Last broken road placed: the next one must leave room to land a jump and line up again. */
+  private lastGapDist = -1e9;
   cranesEnabled = false;
   private loadTmp: [number, number][] = [[0, 0], [0, 0]];
   private gateTmp = new THREE.Vector3();
@@ -153,6 +166,12 @@ export class HazardManager {
       this.potholes.push({ kind: 'pothole', obj, active: false, dist: 0, lat: 0, halfW: 1.25, halfL: 1.1, hp: 1, broken: 0, passed: false, fuse: 0, vel: new THREE.Vector3(), spin: new THREE.Vector3(), pos: new THREE.Vector3(), body: null });
     }
     for (let i = 0; i < 3; i++) {
+      const obj = buildRoadGap(-ROAD.cityWall - 0.6, BEACH.waterFrom + 0.4, BEACH.gapHalfLen);
+      obj.visible = false;
+      this.root.add(obj);
+      this.gaps.push({ active: false, dist: 0, obj, lanes: [], warned: false });
+    }
+    for (let i = 0; i < 3; i++) {
       const gantry = buildCraneGantry(ROAD.cityWall);
       const big = buildCraneLoad(11);
       const small: [THREE.Group, THREE.Group] = [buildCraneLoad(6), buildCraneLoad(6)];
@@ -176,6 +195,7 @@ export class HazardManager {
       const ring = new THREE.Mesh(ringGeo, glowMat(POWERUPS[kind].color));
       this.powerups.push(this.mkPickup(kind, assets.instantiate(kind), ring));
     }
+    for (let i = 0; i < 3; i++) this.powerups.push(this.mkPickup('powerup_boat', assets.instantiate('powerup_boat'), new THREE.Mesh(ringGeo, glowMat(POWERUPS.powerup_boat.color))));
   }
 
   private mkPickup(kind: Pickup['kind'], obj: THREE.Group, ring: THREE.Mesh | null): Pickup {
@@ -201,6 +221,11 @@ export class HazardManager {
   reset(): void {
     for (const h of [...this.barricades, ...this.barrels, ...this.ramps, ...this.cones, ...this.rollers, ...this.potholes]) this.deactivate(h);
     for (const g of this.gates) this.hideGate(g);
+    for (const g of this.gaps) {
+      g.active = false;
+      g.obj.visible = false;
+    }
+    this.lastGapDist = -1e9;
     for (const p of [...this.cash, ...this.powerups]) this.hidePickup(p);
   }
 
@@ -261,8 +286,18 @@ export class HazardManager {
       ? ['powerup_wrench', 'powerup_wrench', 'powerup_wrench', 'powerup_nitro', 'powerup_magnet']
       : heat === 2 ? ['powerup_wrench', 'powerup_wrench', 'powerup_nitro', 'powerup_magnet'] : ['powerup_wrench', 'powerup_nitro', 'powerup_magnet'];
     const want = pick(weights);
-    const p = this.powerups.find((x) => !x.active && x.kind === want) ?? this.powerups.find((x) => !x.active);
+    const p = this.powerups.find((x) => !x.active && x.kind === want) ?? this.powerups.find((x) => !x.active && x.kind !== 'powerup_boat');
     if (!p) return;
+    this.showPickup(p, dist, lat);
+  }
+
+  /** Beach mode: a Boat Kit crate on the road. */
+  private placeBoatKit(dist: number, lat: number): void {
+    const p = this.powerups.find((x) => !x.active && x.kind === 'powerup_boat');
+    if (p) this.showPickup(p, dist, lat);
+  }
+
+  private showPickup(p: Pickup, dist: number, lat: number): void {
     p.active = true;
     p.dist = dist;
     p.life = 999;
@@ -301,6 +336,11 @@ export class HazardManager {
     if (!safe && this.rollersEnabled && c.startDist > 350 && Math.random() < 0.25) {
       const r = this.placeHazard(this.rollers, c.startDist + rand(10, 40), pick(ROAD.lanes));
       if (r) r.obj.rotation.y += Math.PI;
+    }
+    if (!safe && this.beachEnabled) {
+      if (Math.random() < 0.24) this.placeBoatKit(c.startDist + rand(5, 14), pick(ROAD.lanes));
+      // A broken road gets its chunk to itself: two ramp lanes are the only dry way across.
+      if (c.turn === 0 && c.startDist > 300 && Math.random() < 0.5 && this.placeGap(c.startDist + 32)) return;
     }
     if (!safe && this.cranesEnabled && c.startDist > 250 && Math.random() < 0.42 && this.placeGate(c.startDist + 25)) {
       // A crane gets the chunk to itself so nothing else can plug its gaps.
@@ -390,6 +430,58 @@ export class HazardManager {
     closure(-first, 27);
     this.placeCash(s0 + 22, -first * 2.5);
     this.placeCash(s0 + 45, first * 2.5);
+  }
+
+  /** Places a broken-road chasm with two ramps (different lanes) leading up to it. */
+  private placeGap(dist: number): boolean {
+    const g = this.gaps.find((x) => !x.active);
+    if (!g || dist - this.lastGapDist < 130 || this.ramps.filter((r) => !r.active).length < 2) return false;
+    this.lastGapDist = dist;
+    const lanes = [...ROAD.lanes].sort(() => Math.random() - 0.5).slice(0, 2);
+    const rampDist = dist - BEACH.gapHalfLen - 3.2;
+    for (const lane of lanes) this.placeHazard(this.ramps, rampDist, lane);
+    g.active = true;
+    g.dist = dist;
+    g.lanes = lanes;
+    g.warned = false;
+    const heading = this.track.sample(dist, 0, this.gateTmp);
+    g.obj.position.set(this.gateTmp.x, 0, this.gateTmp.z);
+    g.obj.rotation.set(0, heading, 0);
+    g.obj.visible = true;
+    return true;
+  }
+
+  /**
+   * Broken roads: touching down inside the chasm (road or sand) drops the car in — instant game
+   * over. Airborne cars and boats are safe; chasers and traffic that reach it fall in.
+   */
+  private updateGaps(ctx: GameCtx): void {
+    const p = ctx.player;
+    const half = BEACH.gapHalfLen;
+    for (const g of this.gaps) {
+      if (!g.active) continue;
+      if (g.dist < p.dist - 40 || g.dist < this.track.backDist + 2) {
+        g.active = false;
+        g.obj.visible = false;
+        continue;
+      }
+      if (!p.dead && !p.boatMode && p.grounded && Math.abs(p.dist - g.dist) < half - 0.3 && p.lat < BEACH.waterFrom) ctx.fallPlayer();
+      for (const e of ctx.enemies.list) {
+        if (e.alive && e.kind !== 'enemy_boat' && Math.abs(e.dist - g.dist) < half && e.lat < BEACH.waterFrom) ctx.enemies.kill(e, ctx);
+      }
+      for (const cv of ctx.ambient.civList) {
+        if (cv.active && cv.smashed <= 0 && Math.abs(cv.dist - g.dist) < half + 1) {
+          this.track.sample(cv.dist, cv.lat, this.gateTmp);
+          ctx.ambient.blast(this.gateTmp, 1.5);
+        }
+      }
+      const ahead = g.dist - p.dist;
+      if (!g.warned && ahead > 0 && ahead < 150 && !p.dead) {
+        g.warned = true;
+        ctx.toast('⚠ BROKEN ROAD AHEAD — HIT A RAMP!', 'warn');
+        audio.warning();
+      }
+    }
   }
 
   private placeGate(dist: number): boolean {
@@ -584,6 +676,13 @@ export class HazardManager {
 
   /** Steering hint for AI: returns a lateral target that avoids blockers ahead, or null. */
   avoidLat(dist: number, lat: number, look: number): number | null {
+    // Broken roads: line up with the nearest ramp.
+    let gap: RoadGap | null = null;
+    for (const g of this.gaps) {
+      const dd = g.dist - dist;
+      if (g.active && dd > -BEACH.gapHalfLen && dd < look + 70 && lat < BEACH.waterFrom && (!gap || g.dist < gap.dist)) gap = g;
+    }
+    if (gap) return gap.lanes.reduce((best, l) => (Math.abs(l - lat) < Math.abs(best - lat) ? l : best), gap.lanes[0]);
     // Crane gates: aim for the gap that will be open when we arrive (~31 m/s).
     for (const g of this.gates) {
       if (!g.active) continue;
@@ -806,6 +905,7 @@ export class HazardManager {
       }
     }
     this.updateRollers(dt, ctx, playerLow);
+    this.updateGaps(ctx);
     this.updateGates(dt, ctx);
     this.updatePotholes(ctx, playerLow);
     for (const r of this.ramps) {
