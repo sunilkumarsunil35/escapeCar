@@ -100,6 +100,7 @@ export class App {
 
   private buildWorlds(): void {
     this.game = new Game(this.engine, this.assets, this.input, this.host, this.uiRoot);
+    this.game.prewarm();
     this.game.onWrecked = (r) => this.onWrecked(r);
     this.game.onPauseRequest = () => this.togglePause();
     this.garage = new GarageScene(this.engine, this.assets);

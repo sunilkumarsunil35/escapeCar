@@ -73,6 +73,7 @@ export class Game implements GameCtx {
   private bikeStreak = 0;
   /** Real-time seconds left in a hit-stop freeze. */
   private hitStopT = 0;
+  private hitStopCooldown = 0;
   /** Accessibility: skip full-screen flashes. */
   reduceFlashing = false;
   private popTmp = new THREE.Vector3();
@@ -258,25 +259,32 @@ export class Game implements GameCtx {
   }
 
   /**
-   * Importance tiers keep juice proportional (game-feel): small = light shake; medium = shake +
-   * 50 ms hit-stop; large = big shake + 120 ms hit-stop + white flash.
+   * Importance tiers keep juice proportional (game-feel): small = light shake; blast = shake only
+   * (explosions chain, so they never freeze the game); medium = shake + short slow-hit;
+   * large = big shake + longer slow-hit + white flash.
    */
   feedback(tier: FeedbackTier, _at?: THREE.Vector3): void {
-    if (tier === 'small') this.rig.shake(0.18);
+    if (tier === 'small') this.rig.shake(0.15);
+    else if (tier === 'blast') this.rig.shake(0.28);
     else if (tier === 'medium') {
-      this.rig.shake(0.4);
+      this.rig.shake(0.3);
       this.hitStop(0.05);
     } else {
-      this.rig.shake(0.85);
-      this.hitStop(0.12);
+      this.rig.shake(0.6);
+      this.hitStop(0.1);
       audio.duckMusic(0.4, 0.6);
       this.flash(0.35);
     }
   }
 
-  /** Freeze-frame: game time crawls for `seconds` of real time (input & shake keep running). */
+  /**
+   * Slow-hit: game time runs at 25% for `seconds` of real time. A cooldown stops back-to-back
+   * events (kill streaks, chain reactions) from stacking into a stuttering series of freezes.
+   */
   hitStop(seconds: number): void {
+    if (this.hitStopCooldown > 0) return;
     this.hitStopT = Math.max(this.hitStopT, seconds);
+    this.hitStopCooldown = seconds + 0.6;
   }
 
   private flash(strength: number): void {
@@ -313,6 +321,7 @@ export class Game implements GameCtx {
     this.nearMissCash = 0;
     this.vibeAcc = 0;
     this.hitStopT = 0;
+    this.hitStopCooldown = 0;
     this.acc = 0;
     this.player.dist = 0;
     this.player.lat = 0;
@@ -421,7 +430,8 @@ export class Game implements GameCtx {
     const wrecking = this.state === 'wrecking';
     const frozen = this.hitStopT > 0;
     if (frozen) this.hitStopT -= dt;
-    const sdt = dt * (wrecking ? WRECK_TIME_SCALE : 1) * (frozen ? 0.04 : 1);
+    if (this.hitStopCooldown > 0) this.hitStopCooldown -= dt;
+    const sdt = dt * (wrecking ? WRECK_TIME_SCALE : 1) * (frozen ? 0.25 : 1);
     const carInput = this.player.dead ? NEUTRAL : input;
     if (input.nitroPressed && this.state === 'playing') this.fireNitro();
 
@@ -532,6 +542,22 @@ export class Game implements GameCtx {
       }
     }
     this.hud.setThreats(left, right, bottom);
+  }
+
+  /**
+   * Compiles every shader the run can need (explosions, tracers, missiles, mines, rings…) during
+   * the loading screen, so the first blast of a session doesn't hitch while the GPU compiles.
+   */
+  prewarm(): void {
+    const hidden: THREE.Object3D[] = [];
+    this.scene.traverse((o) => {
+      if (!o.visible) {
+        hidden.push(o);
+        o.visible = true;
+      }
+    });
+    this.engine.renderer.compile(this.scene, this.camera);
+    for (const o of hidden) o.visible = false;
   }
 
   render(): void {

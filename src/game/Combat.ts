@@ -419,7 +419,7 @@ export class Combat {
     const ctx = this.ctx;
     if (!ctx) return;
     ctx.fx.explosion(pos, Math.max(0.8, radius / 6));
-    ctx.feedback(radius >= 8 ? 'medium' : 'small', pos);
+    ctx.feedback(radius >= 8 ? 'blast' : 'small', pos);
     for (const e of ctx.enemies.list) {
       if (!e.alive) continue;
       const d = e.worldPos.distanceTo(pos);

@@ -9,7 +9,7 @@ import type { Ambient } from './Ambient';
 import type { HeatDef, PowerupId } from '../data/config';
 import type { GameEvent } from './Objectives';
 
-export type FeedbackTier = 'small' | 'medium' | 'large';
+export type FeedbackTier = 'small' | 'blast' | 'medium' | 'large';
 
 /** Shared runtime context passed to every gameplay system each frame. */
 export interface GameCtx {

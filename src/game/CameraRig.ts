@@ -43,7 +43,8 @@ export class CameraRig {
 
   /** Adds screen-shake trauma (0..1). Hits add up; the shake decays on its own. */
   shake(amount: number): void {
-    this.trauma = Math.min(1, this.trauma + amount * 0.7);
+    // Stacked hits cap at 0.75 trauma so chain reactions never whip the camera around.
+    this.trauma = Math.min(0.75, this.trauma + amount * 0.6);
   }
 
   update(car: PlayerCar, dt: number, wreck: boolean, realDt = dt): void {
@@ -83,13 +84,13 @@ export class CameraRig {
     this.camera.lookAt(this.lookTarget);
     // Trauma shake (game-feel): intensity = trauma², smooth layered sines, decays on wall-clock time.
     if (this.trauma > 0) {
-      this.trauma = Math.max(0, this.trauma - 1.3 * realDt);
+      this.trauma = Math.max(0, this.trauma - 1.8 * realDt);
       const s = this.trauma * this.trauma * this.shakeScale;
       this.shakeT += realDt * 28;
       const n = (a: number, b: number): number => Math.sin(this.shakeT * a) * 0.6 + Math.sin(this.shakeT * b + 1.3) * 0.4;
-      this.camera.translateX(0.9 * s * n(1.7, 3.1));
-      this.camera.translateY(0.6 * s * n(2.3, 4.1));
-      this.camera.rotateZ(0.06 * s * n(1.1, 2.7));
+      this.camera.translateX(0.55 * s * n(1.7, 3.1));
+      this.camera.translateY(0.35 * s * n(2.3, 4.1));
+      this.camera.rotateZ(0.02 * s * n(1.1, 2.7));
     }
     const fov = this.baseFov + clamp((speed - 26) * 0.45, 0, 12) + (car.boosting ? 4 : 0);
     this.camera.fov = snap ? fov : damp(this.camera.fov, fov, 4, dt);
