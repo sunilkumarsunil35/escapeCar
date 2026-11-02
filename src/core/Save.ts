@@ -1,5 +1,5 @@
 import type { SpeakerMode } from './Audio';
-import type { CarId, GadgetId, UpgradeCategory, WeaponId } from '../data/config';
+import { FACTORY_PAINT, type CarId, type GadgetId, type PaintId, type UpgradeCategory, type WeaponId } from '../data/config';
 
 export interface LeaderEntry {
   name: string;
@@ -25,6 +25,9 @@ export interface SaveData {
   bestScore: number;
   ownedCars: CarId[];
   car: CarId;
+  /** Paint jobs bought per car, and the one each car wears. */
+  ownedPaints: Record<CarId, PaintId[]>;
+  paint: Record<CarId, PaintId>;
   upgrades: Record<UpgradeCategory, number>;
   ownedWeapons: WeaponId[];
   weapon: WeaponId;
@@ -47,6 +50,8 @@ export function defaultSave(): SaveData {
     bestScore: 0,
     ownedCars: ['car_sedan'],
     car: 'car_sedan',
+    ownedPaints: { car_sedan: [FACTORY_PAINT.car_sedan], car_tuner: [FACTORY_PAINT.car_tuner], car_truck: [FACTORY_PAINT.car_truck] },
+    paint: { ...FACTORY_PAINT },
     upgrades: { engine: 0, tires: 0, armor: 0 },
     ownedWeapons: ['weapon_tommy'],
     weapon: 'weapon_tommy',
@@ -83,6 +88,8 @@ export class SaveStore {
         ownedGadgets: parsed.ownedGadgets?.length ? parsed.ownedGadgets : base.ownedGadgets,
         leaderboard: Array.isArray(parsed.leaderboard) ? parsed.leaderboard : [],
         settings: { ...base.settings, ...(parsed.settings ?? {}) },
+        ownedPaints: { ...base.ownedPaints, ...(parsed.ownedPaints ?? {}) },
+        paint: { ...base.paint, ...(parsed.paint ?? {}) },
       };
     } catch {
       return base;

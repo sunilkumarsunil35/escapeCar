@@ -248,7 +248,7 @@ button { font-family: inherit; cursor: pointer; }
 @media (pointer: coarse) { .hud-hint { bottom: auto; top: calc(56px + var(--safe-t)); font-size: 10px; } }
 
 /* ---------- Garage ---------- */
-.garage { position: absolute; inset: 0; z-index: 6; pointer-events: none !important; display: grid; grid-template-rows: auto 1fr auto; padding: calc(10px + var(--safe-t)) calc(14px + var(--safe-r)) calc(10px + var(--safe-b)) calc(14px + var(--safe-l)); gap: 10px; }
+.garage { position: absolute; inset: 0; z-index: 6; pointer-events: none !important; display: grid; grid-template-rows: auto 1fr auto; grid-template-columns: minmax(0, 1fr); padding: calc(10px + var(--safe-t)) calc(14px + var(--safe-r)) calc(10px + var(--safe-b)) calc(14px + var(--safe-l)); gap: 10px; }
 .garage > * { pointer-events: auto; }
 .g-top { display: flex; align-items: center; gap: 16px; padding: 8px 14px; border-radius: 14px; background: var(--panel); border: 1px solid var(--panel-line); backdrop-filter: blur(6px); }
 .g-logo { font-size: clamp(20px, 2.6vw, 30px); }
@@ -273,11 +273,11 @@ button { font-family: inherit; cursor: pointer; }
 .g-trait { font-size: 12px; opacity: 0.8; line-height: 1.35; }
 .g-loadout { display: flex; flex-wrap: wrap; gap: 4px; }
 .g-loadout span { font-size: 10px; font-weight: 700; padding: 3px 7px; border-radius: 6px; background: rgba(245, 158, 11, 0.16); border: 1px solid rgba(245, 158, 11, 0.4); }
-.g-bottom { padding: 10px 12px; border-radius: 14px; background: var(--panel); border: 1px solid var(--panel-line); backdrop-filter: blur(6px); display: flex; flex-direction: column; gap: 8px; }
+.g-bottom { min-width: 0; padding: 10px 12px; border-radius: 14px; background: var(--panel); border: 1px solid var(--panel-line); backdrop-filter: blur(6px); display: flex; flex-direction: column; gap: 8px; }
 .g-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
 .g-tab { padding: 7px 12px; border-radius: 8px; border: 2px solid transparent; background: rgba(255, 255, 255, 0.07); color: var(--cream); font-weight: 900; font-size: 12px; letter-spacing: 0.08em; }
 .g-tab.active { background: var(--amber); color: var(--ink); }
-.g-items { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+.g-items { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; min-width: 0; scrollbar-width: thin; }
 .g-item { min-width: 150px; flex: 0 0 auto; text-align: left; padding: 8px 10px; border-radius: 10px; border: 2px solid rgba(255, 255, 255, 0.14); background: rgba(0, 0, 0, 0.3); color: var(--cream); display: flex; flex-direction: column; gap: 2px; }
 .g-item em { font-style: normal; font-size: 9px; letter-spacing: 0.14em; opacity: 0.6; }
 .g-item b { font-size: 13px; }
@@ -468,3 +468,9 @@ body.controller-mode { background: #0b0f1a; }
 
 /* ---------- Debug perf overlay (?debug) ---------- */
 .perf-hud { position: absolute; left: 8px; bottom: 8px; z-index: 50; pointer-events: none !important; font: 11px/1.35 ui-monospace, Consolas, monospace; color: #a7f3d0; background: rgba(0, 0, 0, 0.6); padding: 4px 7px; border-radius: 6px; white-space: pre; }
+
+/* ---------- Paint swatches ---------- */
+.g-item.paint { min-width: 128px; padding-left: 40px; position: relative; }
+.g-swatch { position: absolute; left: 10px; top: 50%; width: 22px; height: 22px; margin-top: -11px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.7); box-shadow: inset 0 -4px 6px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.5); }
+.g-item.paint.sel .g-swatch { border-color: var(--amber); transform: scale(1.12); }
+@media (max-height: 420px) { .g-item.paint { min-width: 104px; padding-left: 34px; } .g-swatch { width: 18px; height: 18px; margin-top: -9px; left: 8px; } }

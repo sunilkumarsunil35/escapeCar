@@ -38,6 +38,42 @@ export const CARS: Record<CarId, CarDef> = {
 };
 export const CAR_ORDER: CarId[] = ['car_sedan', 'car_tuner', 'car_truck'];
 
+export type PaintId =
+  | 'mafia_red' | 'street_teal' | 'army_olive' | 'midnight_black' | 'cream' | 'racing_green'
+  | 'royal_blue' | 'taxi_yellow' | 'gunmetal' | 'plum' | 'sunset_orange' | 'pearl_white';
+
+export interface PaintDef {
+  id: PaintId;
+  name: string;
+  color: number;
+}
+
+/** Cosmetic paint jobs (any car can wear any colour). */
+export const PAINTS: PaintDef[] = [
+  { id: 'mafia_red', name: 'Mafia Red', color: 0xc8402c },
+  { id: 'street_teal', name: 'Street Teal', color: 0x0ea5b7 },
+  { id: 'army_olive', name: 'Army Olive', color: 0x3f4a3a },
+  { id: 'midnight_black', name: 'Midnight Black', color: 0x1f2026 },
+  { id: 'cream', name: 'Vintage Cream', color: 0xe6d8b8 },
+  { id: 'racing_green', name: 'Racing Green', color: 0x2f6b45 },
+  { id: 'royal_blue', name: 'Royal Blue', color: 0x2b4f9e },
+  { id: 'taxi_yellow', name: 'Taxi Yellow', color: 0xf2c230 },
+  { id: 'gunmetal', name: 'Gunmetal', color: 0x5b6168 },
+  { id: 'plum', name: 'Mob Plum', color: 0x6e2f5a },
+  { id: 'sunset_orange', name: 'Sunset Orange', color: 0xe0702a },
+  { id: 'pearl_white', name: 'Pearl White', color: 0xf1efe8 },
+];
+
+/** Each car's free factory colour. */
+export const FACTORY_PAINT: Record<CarId, PaintId> = { car_sedan: 'mafia_red', car_tuner: 'street_teal', car_truck: 'army_olive' };
+
+/** Every paint costs the same on a given car; pricier cars cost more to repaint. */
+export const PAINT_PRICE: Record<CarId, number> = { car_sedan: 250, car_tuner: 500, car_truck: 750 };
+
+export function paintColor(id: PaintId): number {
+  return (PAINTS.find((p) => p.id === id) ?? PAINTS[0]).color;
+}
+
 export interface WeaponDef {
   id: WeaponId;
   name: string;

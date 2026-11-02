@@ -114,6 +114,7 @@ export function buildSedan(sockets: SocketMap, opts: SedanOpts, wheelStyle: Whee
   const body = opts.body;
   const fender = opts.fender ?? body;
   const glass = opts.glass ?? 0x1e2633;
+  const seam = new THREE.Color(body).multiplyScalar(0.7).getHex();
   const fz = sockets.wheel_FL?.[2] ?? -1.3;
   const rz = sockets.wheel_RL?.[2] ?? 1.3;
   const wy = sockets.wheel_FL?.[1] ?? 0.42;
@@ -135,7 +136,7 @@ export function buildSedan(sockets: SocketMap, opts: SedanOpts, wheelStyle: Whee
     b.box(0.02, 0.34, 0.5, glass, [sx * 0.69, 1.31, 0.66]);
     // Door handles + seam
     b.box(0.03, 0.03, 0.12, C.chrome, [sx * 0.715, 0.98, 0.18]);
-    b.box(0.015, 0.5, 0.02, opts.enemy ? C.ironLight : C.redDark, [sx * 0.712, 0.78, 0.33]);
+    b.box(0.015, 0.5, 0.02, opts.enemy ? C.ironLight : seam, [sx * 0.712, 0.78, 0.33]);
     // Hood louvers
     for (let i = 0; i < 3; i++) b.box(0.02, 0.05, 0.22, C.iron, [sx * 0.712, 0.86 - i * 0.07, -1.25]);
     // Fenders front & rear

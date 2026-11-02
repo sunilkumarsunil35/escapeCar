@@ -1,5 +1,6 @@
 import {
-  CARS, CAR_ORDER, GADGETS, GADGET_ORDER, UPGRADES, WEAPONS, WEAPON_ORDER, type CarId, type GadgetId, type UpgradeCategory, type WeaponId,
+  CARS, CAR_ORDER, GADGETS, GADGET_ORDER, PAINTS, PAINT_PRICE, UPGRADES, WEAPONS, WEAPON_ORDER, paintColor,
+  type CarId, type GadgetId, type PaintId, type UpgradeCategory, type WeaponId,
 } from '../data/config';
 import { formatCash, formatTime } from '../core/math';
 import type { SaveStore } from '../core/Save';
@@ -7,9 +8,10 @@ import { computeStats, loadoutFromSave, type Loadout } from '../game/Loadout';
 import type { PreviewKind } from '../garage/GarageScene';
 import { audio } from '../core/Audio';
 
-type Tab = 'car' | UpgradeCategory | 'weapon' | 'gadget';
+type Tab = 'car' | 'paint' | UpgradeCategory | 'weapon' | 'gadget';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'car', label: 'CAR' },
+  { id: 'paint', label: 'PAINT' },
   { id: 'engine', label: 'ENGINE' },
   { id: 'tires', label: 'TIRES' },
   { id: 'armor', label: 'ARMOR' },
@@ -25,13 +27,15 @@ interface Item {
   owned: boolean;
   equipped: boolean;
   locked: boolean;
+  /** Paint swatch colour (paint tab only). */
+  swatch?: number;
 }
 
 /** Garage & main menu overlay (doc §6.3): cash, best time, car selector + stats, upgrade tabs, PLAY. */
 export class GarageUI {
   readonly el: HTMLDivElement;
   private tab: Tab = 'car';
-  private sel: Record<Tab, number> = { car: 0, engine: 0, tires: 0, armor: 0, weapon: 0, gadget: 0 };
+  private sel: Record<Tab, number> = { car: 0, paint: 0, engine: 0, tires: 0, armor: 0, weapon: 0, gadget: 0 };
   onPlay: (() => void) | null = null;
   onPair: (() => void) | null = null;
   onLoadout: ((l: Loadout) => void) | null = null;
@@ -122,6 +126,7 @@ export class GarageUI {
   private syncSelection(): void {
     const d = this.save.data;
     this.sel.car = CAR_ORDER.indexOf(d.car);
+    this.sel.paint = Math.max(0, PAINTS.findIndex((pt) => pt.id === d.paint[d.car]));
     this.sel.engine = Math.min(2, d.upgrades.engine + 1);
     this.sel.tires = Math.min(2, d.upgrades.tires + 1);
     this.sel.armor = Math.min(2, d.upgrades.armor + 1);
@@ -150,6 +155,13 @@ export class GarageUI {
           key: id, name: CARS[id].name, desc: CARS[id].trait, cost: CARS[id].cost,
           owned: d.ownedCars.includes(id), equipped: d.car === id, locked: false,
         }));
+      case 'paint': {
+        const car = d.car;
+        return PAINTS.map((pt) => ({
+          key: pt.id, name: pt.name, desc: `Repaint your ${CARS[car].name}. Every colour is ${'$' + PAINT_PRICE[car]} on this car.`,
+          cost: PAINT_PRICE[car], owned: d.ownedPaints[car].includes(pt.id), equipped: d.paint[car] === pt.id, locked: false, swatch: pt.color,
+        }));
+      }
       case 'engine':
       case 'tires':
       case 'armor':
@@ -188,6 +200,10 @@ export class GarageUI {
         if (!d.ownedCars.includes(it.key as CarId)) d.ownedCars.push(it.key as CarId);
         d.car = it.key as CarId;
         break;
+      case 'paint':
+        if (!d.ownedPaints[d.car].includes(it.key as PaintId)) d.ownedPaints[d.car].push(it.key as PaintId);
+        d.paint[d.car] = it.key as PaintId;
+        break;
       case 'engine':
       case 'tires':
       case 'armor':
@@ -219,7 +235,7 @@ export class GarageUI {
   /** True if any not-yet-owned item is affordable (drives the "• New Upgrade" dot). */
   hasAffordableUpgrade(): boolean {
     const cash = this.save.data.cash;
-    return TABS.some((t) => this.items(t.id).some((i) => !i.owned && !i.locked && i.cost <= cash));
+    return TABS.some((t) => t.id !== 'paint' && this.items(t.id).some((i) => !i.owned && !i.locked && i.cost <= cash));
   }
 
   refresh(): void {
@@ -233,7 +249,7 @@ export class GarageUI {
     // Car panel shows the browsed car's stats with current upgrades
     const carId = CAR_ORDER[this.sel.car];
     const car = CARS[carId];
-    const l: Loadout = { ...loadoutFromSave(d), car: carId };
+    const l: Loadout = { ...loadoutFromSave(d), car: carId, paint: paintColor(d.paint[carId]) };
     const st = computeStats(l);
     (this.el.querySelector('.g-carname') as HTMLElement).innerHTML = `${car.name.toUpperCase()}${d.ownedCars.includes(carId) ? '' : `<small>${formatCash(car.cost)}</small>`}`;
     (this.el.querySelector('.b-speed') as HTMLElement).style.width = `${Math.min(100, (st.maxSpeed / 44) * 100)}%`;
@@ -250,7 +266,8 @@ export class GarageUI {
         const state = it.equipped ? 'EQUIPPED' : it.owned ? 'OWNED' : it.locked ? 'LOCKED' : it.cost === 0 ? 'FREE' : formatCash(it.cost);
         const cls = ['g-item', i === this.sel[this.tab] ? 'sel' : '', it.equipped ? 'eq' : '', it.locked ? 'locked' : '', !it.owned && it.cost > d.cash ? 'pricey' : ''].join(' ');
         const tier = this.tab === 'engine' || this.tab === 'tires' || this.tab === 'armor' ? `<em>TIER ${i + 1}</em>` : '';
-        return `<button class="${cls}" data-i="${i}">${tier}<b>${it.name}</b><span>${state}</span></button>`;
+        const sw = it.swatch !== undefined ? `<i class="g-swatch" style="background:#${it.swatch.toString(16).padStart(6, '0')}"></i>` : '';
+        return `<button class="${cls}${sw ? ' paint' : ''}" data-i="${i}">${tier}${sw}<b>${it.name}</b><span>${state}</span></button>`;
       })
       .join('');
     itemsEl.querySelectorAll<HTMLButtonElement>('.g-item').forEach((b) =>
@@ -279,7 +296,9 @@ export class GarageUI {
     }
 
     // 3D: show browsed car (or equipped), and a floating preview of the browsed item
-    const shown: Loadout = { ...loadoutFromSave(d), car: this.tab === 'car' ? carId : d.car };
+    const shownCar = this.tab === 'car' ? carId : d.car;
+    const browsedPaint = this.tab === 'paint' ? PAINTS[this.sel.paint]?.color : undefined;
+    const shown: Loadout = { ...loadoutFromSave(d), car: shownCar, paint: browsedPaint ?? paintColor(d.paint[shownCar]) };
     this.onLoadout?.(shown);
     const idx = this.sel[this.tab];
     switch (this.tab) {

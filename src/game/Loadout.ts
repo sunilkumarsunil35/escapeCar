@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { AssetRegistry } from '../assets/AssetRegistry';
 import {
-  ARMOR_HP_MULT, CARS, ENGINE_CHARGE_MULT, ENGINE_SPEED_MULT, TIRE_BURST_MULT, type CarId, type GadgetId, type WeaponId,
+  paintColor, ARMOR_HP_MULT, CARS, ENGINE_CHARGE_MULT, ENGINE_SPEED_MULT, TIRE_BURST_MULT, type CarId, type GadgetId, type WeaponId,
 } from '../data/config';
 import type { SaveData } from '../core/Save';
 
@@ -12,10 +12,12 @@ export interface Loadout {
   engine: number;
   tires: number;
   armor: number;
+  /** Body colour (hex). */
+  paint: number;
 }
 
 export function loadoutFromSave(d: SaveData): Loadout {
-  return { car: d.car, weapon: d.weapon, gadget: d.gadget, engine: d.upgrades.engine, tires: d.upgrades.tires, armor: d.upgrades.armor };
+  return { car: d.car, weapon: d.weapon, gadget: d.gadget, engine: d.upgrades.engine, tires: d.upgrades.tires, armor: d.upgrades.armor, paint: paintColor(d.paint[d.car]) };
 }
 
 export interface CarStats {
@@ -47,7 +49,7 @@ export function computeStats(l: Loadout): CarStats {
 
 /** Builds the full player car (body + roof weapon on socket_roof_weapon + dozer on socket_front_armor). */
 export function buildLoadoutModel(assets: AssetRegistry, l: Loadout): THREE.Group {
-  const car = assets.instantiate(l.car, { wheelStyle: l.tires >= 2 ? 'armored' : undefined });
+  const car = assets.instantiate(l.car, { wheelStyle: l.tires >= 2 ? 'armored' : undefined, color: l.paint });
   const roof = car.getObjectByName('socket_roof_weapon');
   if (roof) {
     const weapon = assets.instantiate(l.weapon);
